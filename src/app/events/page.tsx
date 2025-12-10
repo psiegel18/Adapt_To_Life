@@ -1,9 +1,11 @@
 import { Metadata } from "next";
+import { getEvents, DbEvent } from "@/lib/db";
 import {
-  upcomingEvents,
+  upcomingEvents as staticEvents,
   formatDate,
   getCategoryColor,
   getCategoryLabel,
+  Event,
 } from "@/data/events";
 
 export const metadata: Metadata = {
@@ -12,7 +14,37 @@ export const metadata: Metadata = {
     "Join our upcoming adaptive sports events, wheelchair basketball games, swimming sessions, and community gatherings.",
 };
 
-export default function EventsPage() {
+// Revalidate every 60 seconds
+export const revalidate = 60;
+
+async function getEventsData(): Promise<Event[]> {
+  try {
+    // Try to fetch from database
+    const dbEvents = await getEvents();
+    if (dbEvents && dbEvents.length > 0) {
+      // Transform database events to match the Event interface
+      return dbEvents.map((event: DbEvent) => ({
+        id: event.id.toString(),
+        title: event.title,
+        date: event.date,
+        time: event.time,
+        location: event.location,
+        description: event.description,
+        category: event.category,
+        imageUrl: event.image_url,
+        registrationUrl: event.registration_url,
+      }));
+    }
+  } catch (error) {
+    console.error("Error fetching events from database:", error);
+  }
+  // Fall back to static events
+  return staticEvents;
+}
+
+export default async function EventsPage() {
+  const events = await getEventsData();
+
   return (
     <div className="bg-gray-50 min-h-screen">
       {/* Header */}
@@ -30,7 +62,7 @@ export default function EventsPage() {
       {/* Events Grid */}
       <section className="py-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          {upcomingEvents.length === 0 ? (
+          {events.length === 0 ? (
             <div className="text-center py-12">
               <p className="text-gray-600 text-lg">
                 No upcoming events at this time. Check back soon!
@@ -38,7 +70,7 @@ export default function EventsPage() {
             </div>
           ) : (
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {upcomingEvents.map((event) => (
+              {events.map((event) => (
                 <div
                   key={event.id}
                   className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-lg transition-shadow"
@@ -100,9 +132,20 @@ export default function EventsPage() {
                       </div>
                     </div>
 
-                    <button className="mt-6 w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors">
-                      Learn More
-                    </button>
+                    {event.registrationUrl ? (
+                      <a
+                        href={event.registrationUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-6 w-full block text-center bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+                      >
+                        Register
+                      </a>
+                    ) : (
+                      <button className="mt-6 w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors">
+                        Learn More
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}

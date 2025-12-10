@@ -1,5 +1,6 @@
 import { Metadata } from "next";
 import Link from "next/link";
+import { getSetting } from "@/lib/db";
 
 export const metadata: Metadata = {
   title: "Donate | AdaptToLife",
@@ -7,7 +8,23 @@ export const metadata: Metadata = {
     "Support AdaptToLife with a tax-deductible donation. Help us provide adaptive sports programs and equipment for individuals with physical disabilities.",
 };
 
-export default function DonatePage() {
+// Revalidate every 60 seconds
+export const revalidate = 60;
+
+async function getDonationUrl(): Promise<string> {
+  try {
+    const url = await getSetting("donation_url");
+    if (url) return url;
+  } catch (error) {
+    console.error("Error fetching donation URL:", error);
+  }
+  // Default fallback
+  return "https://www.zeffy.com/donation-form/adapt-to-life";
+}
+
+export default async function DonatePage() {
+  const donationUrl = await getDonationUrl();
+
   return (
     <div className="bg-gray-50 min-h-screen">
       {/* Header */}
@@ -38,17 +55,9 @@ export default function DonatePage() {
                 </p>
               </div>
 
-              {/* Zeffy Donation Button/Link */}
-              {/*
-                To set up Zeffy:
-                1. Create a free account at zeffy.com
-                2. Set up your organization profile
-                3. Create a donation form
-                4. Replace the href below with your Zeffy donation form URL
-              */}
               <div className="text-center">
                 <a
-                  href="https://www.zeffy.com/donation-form/adapt-to-life"
+                  href={donationUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-block bg-orange-500 text-white px-12 py-4 rounded-full font-semibold text-lg hover:bg-orange-600 transition-colors shadow-lg hover:shadow-xl"
@@ -59,16 +68,6 @@ export default function DonatePage() {
                   You will be redirected to our secure donation form on Zeffy.
                 </p>
               </div>
-
-              {/* Alternative: Embed Zeffy Form */}
-              {/*
-                You can also embed the Zeffy form directly:
-                <iframe
-                  src="https://www.zeffy.com/embed/donation-form/YOUR-FORM-ID"
-                  style={{ width: '100%', height: '600px', border: 'none' }}
-                  title="Donation form"
-                />
-              */}
             </div>
           </div>
 
