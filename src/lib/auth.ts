@@ -1,4 +1,4 @@
-import { NextAuthOptions, Provider } from "next-auth";
+import { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import GitHubProvider from "next-auth/providers/github";
 import AzureADProvider from "next-auth/providers/azure-ad";
@@ -8,7 +8,7 @@ import AppleProvider from "next-auth/providers/apple";
 const ADMIN_EMAILS = process.env.ADMIN_EMAILS?.split(",").map((e) => e.trim()) || [];
 
 // Build providers array conditionally based on available env vars
-const providers: Provider[] = [];
+const providers: NextAuthOptions["providers"] = [];
 
 if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
   providers.push(
