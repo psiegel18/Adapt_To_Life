@@ -4,20 +4,23 @@ import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 
 export const metadata: Metadata = {
-  title: "AdaptToLife - Empowering Active Living for All Abilities",
+  title: "AdaptToLife - The Path to Play",
   description:
-    "AdaptToLife is a 501(c)(3) non-profit dedicated to helping individuals with physical disabilities participate in adaptive sports and activities, including wheelchair basketball.",
+    "For 15 million Americans with physical disabilities, the journey from diagnosis to sport is a broken system. We fix it. AdaptToLife is a 501(c)(3) non-profit building the pathway to adaptive sports.",
   keywords: [
     "adaptive sports",
     "wheelchair basketball",
     "disability sports",
-    "inclusive activities",
+    "adaptive sports grants",
+    "sports equipment grants",
     "non-profit",
+    "CTRS",
+    "therapeutic recreation",
   ],
   openGraph: {
-    title: "AdaptToLife - Empowering Active Living for All Abilities",
+    title: "AdaptToLife - The Path to Play",
     description:
-      "Helping individuals with physical disabilities participate in adaptive sports and activities.",
+      "Building the pathway from diagnosis to sport for 15 million Americans with physical disabilities.",
     type: "website",
   },
 };
