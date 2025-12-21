@@ -17,6 +17,11 @@ export const metadata: Metadata = {
     "CTRS",
     "therapeutic recreation",
   ],
+  icons: {
+    icon: "/AdaptToLife_light.ico",
+    shortcut: "/AdaptToLife_light.ico",
+    apple: "/AdaptToLife_light.png",
+  },
   openGraph: {
     title: "AdaptToLife - The Path to Play",
     description:

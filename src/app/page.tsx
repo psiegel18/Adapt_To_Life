@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 
 export default function Home() {
   return (
@@ -6,6 +7,16 @@ export default function Home() {
       {/* Section 1.1: Hero */}
       <section className="min-h-[80vh] flex items-center justify-center bg-white">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-24 text-center">
+          <div className="mb-12">
+            <Image
+              src="/AdaptToLife_dark.png"
+              alt="AdaptToLife Logo"
+              width={200}
+              height={200}
+              className="mx-auto"
+              priority
+            />
+          </div>
           <h1 className="text-5xl md:text-7xl font-bold text-black mb-8">
             The Path to Play.
           </h1>
