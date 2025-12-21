@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 
 export default function Footer() {
   return (
@@ -8,9 +9,13 @@ export default function Footer() {
           {/* Logo and Description */}
           <div className="col-span-1 md:col-span-2">
             <div className="flex items-center gap-2 mb-6">
-              <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center">
-                <span className="text-black font-bold text-lg">A</span>
-              </div>
+              <Image
+                src="/AdaptToLife_light.png"
+                alt="AdaptToLife"
+                width={40}
+                height={40}
+                className="w-10 h-10 object-contain"
+              />
               <span className="text-xl font-bold">
                 Adapt<span className="text-[#FF6B35]">ToLife</span>
               </span>

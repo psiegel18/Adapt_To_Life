@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useState } from "react";
 
 export default function Navigation() {
@@ -20,9 +21,13 @@ export default function Navigation() {
         <div className="flex justify-between h-16">
           <div className="flex items-center">
             <Link href="/" className="flex items-center gap-2">
-              <div className="w-10 h-10 bg-black rounded-full flex items-center justify-center">
-                <span className="text-white font-bold text-lg">A</span>
-              </div>
+              <Image
+                src="/AdaptToLife_dark.png"
+                alt="AdaptToLife"
+                width={40}
+                height={40}
+                className="w-10 h-10 object-contain"
+              />
               <span className="text-xl font-bold text-black">
                 Adapt<span className="text-[#FF6B35]">ToLife</span>
               </span>
