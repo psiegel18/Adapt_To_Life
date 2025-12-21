@@ -21,13 +21,15 @@ export default function Navigation() {
         <div className="flex justify-between h-16">
           <div className="flex items-center">
             <Link href="/" className="flex items-center gap-2">
-              <Image
-                src="/AdaptToLife_dark.png"
-                alt="AdaptToLife"
-                width={40}
-                height={40}
-                className="w-10 h-10 object-contain"
-              />
+              <div className="w-10 h-10 rounded-full border-2 border-black overflow-hidden flex items-center justify-center bg-white">
+                <Image
+                  src="/AdaptToLife_dark.png"
+                  alt="AdaptToLife"
+                  width={32}
+                  height={32}
+                  className="w-8 h-8 object-cover scale-125"
+                />
+              </div>
               <span className="text-xl font-bold text-black">
                 Adapt<span className="text-[#FF6B35]">ToLife</span>
               </span>

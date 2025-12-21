@@ -9,13 +9,15 @@ export default function Footer() {
           {/* Logo and Description */}
           <div className="col-span-1 md:col-span-2">
             <div className="flex items-center gap-2 mb-6">
-              <Image
-                src="/AdaptToLife_light.png"
-                alt="AdaptToLife"
-                width={40}
-                height={40}
-                className="w-10 h-10 object-contain"
-              />
+              <div className="w-10 h-10 rounded-full border-2 border-white overflow-hidden flex items-center justify-center bg-black">
+                <Image
+                  src="/AdaptToLife_light.png"
+                  alt="AdaptToLife"
+                  width={32}
+                  height={32}
+                  className="w-8 h-8 object-cover scale-125"
+                />
+              </div>
               <span className="text-xl font-bold">
                 Adapt<span className="text-[#FF6B35]">ToLife</span>
               </span>
