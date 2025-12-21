@@ -3,7 +3,7 @@
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useCallback } from "react";
-import { DbEvent } from "@/lib/db";
+import { DbEvent, GrantApplication, Referral } from "@/lib/db";
 
 type EventFormData = Omit<DbEvent, "id" | "created_at" | "updated_at">;
 
@@ -23,6 +23,8 @@ export default function AdminPage() {
   const router = useRouter();
 
   const [events, setEvents] = useState<DbEvent[]>([]);
+  const [applications, setApplications] = useState<GrantApplication[]>([]);
+  const [referrals, setReferrals] = useState<Referral[]>([]);
   const [donationUrl, setDonationUrl] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -36,11 +38,16 @@ export default function AdminPage() {
   const [editingEvent, setEditingEvent] = useState<DbEvent | null>(null);
   const [eventForm, setEventForm] = useState<EventFormData>(emptyEvent);
 
+  // Active tab for applications/referrals
+  const [activeTab, setActiveTab] = useState<"applications" | "referrals">("applications");
+
   const fetchData = useCallback(async () => {
     try {
-      const [eventsRes, settingsRes] = await Promise.all([
+      const [eventsRes, settingsRes, applicationsRes, referralsRes] = await Promise.all([
         fetch("/api/events"),
         fetch("/api/settings?key=donation_url"),
+        fetch("/api/applications"),
+        fetch("/api/referrals"),
       ]);
 
       if (eventsRes.ok) {
@@ -51,6 +58,16 @@ export default function AdminPage() {
       if (settingsRes.ok) {
         const settingsData = await settingsRes.json();
         setDonationUrl(settingsData.value || "");
+      }
+
+      if (applicationsRes.ok) {
+        const applicationsData = await applicationsRes.json();
+        setApplications(applicationsData);
+      }
+
+      if (referralsRes.ok) {
+        const referralsData = await referralsRes.json();
+        setReferrals(referralsData);
       }
     } catch (error) {
       console.error("Error fetching data:", error);
@@ -176,6 +193,92 @@ export default function AdminPage() {
     setShowEventForm(true);
   };
 
+  const updateApplicationStatus = async (id: number, status: string) => {
+    try {
+      const res = await fetch(`/api/applications/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      if (res.ok) {
+        showMessage("success", "Application status updated!");
+        fetchData();
+      } else {
+        showMessage("error", "Failed to update application");
+      }
+    } catch {
+      showMessage("error", "Failed to update application");
+    }
+  };
+
+  const deleteApplication = async (id: number) => {
+    if (!confirm("Are you sure you want to delete this application?")) return;
+
+    try {
+      const res = await fetch(`/api/applications/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        showMessage("success", "Application deleted!");
+        fetchData();
+      } else {
+        showMessage("error", "Failed to delete application");
+      }
+    } catch {
+      showMessage("error", "Failed to delete application");
+    }
+  };
+
+  const updateReferralStatus = async (id: number, status: string) => {
+    try {
+      const res = await fetch(`/api/referrals/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      if (res.ok) {
+        showMessage("success", "Referral status updated!");
+        fetchData();
+      } else {
+        showMessage("error", "Failed to update referral");
+      }
+    } catch {
+      showMessage("error", "Failed to update referral");
+    }
+  };
+
+  const deleteReferral = async (id: number) => {
+    if (!confirm("Are you sure you want to delete this referral?")) return;
+
+    try {
+      const res = await fetch(`/api/referrals/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        showMessage("success", "Referral deleted!");
+        fetchData();
+      } else {
+        showMessage("error", "Failed to delete referral");
+      }
+    } catch {
+      showMessage("error", "Failed to delete referral");
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "pending":
+        return "bg-yellow-100 text-yellow-800";
+      case "approved":
+      case "enrolled":
+        return "bg-green-100 text-green-800";
+      case "denied":
+      case "closed":
+        return "bg-red-100 text-red-800";
+      case "in_review":
+      case "contacted":
+        return "bg-blue-100 text-blue-800";
+      default:
+        return "bg-gray-100 text-gray-800";
+    }
+  };
+
   if (status === "loading" || isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -220,6 +323,22 @@ export default function AdminPage() {
       )}
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Email Notice */}
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-8">
+          <div className="flex items-start gap-3">
+            <svg className="w-6 h-6 text-amber-600 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <div>
+              <h3 className="font-semibold text-amber-800">Email Notifications Not Configured</h3>
+              <p className="text-sm text-amber-700 mt-1">
+                Email notifications are not set up yet. You will not receive automatic emails when new applications or referrals are submitted.
+                Please check this dashboard regularly for new submissions.
+              </p>
+            </div>
+          </div>
+        </div>
+
         {/* Initialize Database Section */}
         <section className="bg-white rounded-xl shadow-md p-6 mb-8">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">
@@ -259,6 +378,184 @@ export default function AdminPage() {
               {isSaving ? "Saving..." : "Save"}
             </button>
           </div>
+        </section>
+
+        {/* Applications & Referrals Section */}
+        <section className="bg-white rounded-xl shadow-md p-6 mb-8">
+          <div className="flex gap-4 border-b border-gray-200 mb-6">
+            <button
+              onClick={() => setActiveTab("applications")}
+              className={`pb-3 px-1 font-medium ${
+                activeTab === "applications"
+                  ? "text-blue-600 border-b-2 border-blue-600"
+                  : "text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              Grant Applications ({applications.length})
+            </button>
+            <button
+              onClick={() => setActiveTab("referrals")}
+              className={`pb-3 px-1 font-medium ${
+                activeTab === "referrals"
+                  ? "text-blue-600 border-b-2 border-blue-600"
+                  : "text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              Patient Referrals ({referrals.length})
+            </button>
+          </div>
+
+          {/* Applications Tab */}
+          {activeTab === "applications" && (
+            <div>
+              {applications.length === 0 ? (
+                <p className="text-gray-500 text-center py-8">
+                  No grant applications yet.
+                </p>
+              ) : (
+                <div className="space-y-4">
+                  {applications.map((app) => (
+                    <div
+                      key={app.id}
+                      className="border border-gray-200 rounded-lg p-4"
+                    >
+                      <div className="flex justify-between items-start mb-3">
+                        <div>
+                          <h3 className="font-semibold text-gray-900">{app.name}</h3>
+                          <p className="text-sm text-gray-600">{app.email}</p>
+                          {app.phone && <p className="text-sm text-gray-500">{app.phone}</p>}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-xs px-2 py-1 rounded-full ${getStatusColor(app.status)}`}>
+                            {app.status}
+                          </span>
+                          <select
+                            value={app.status}
+                            onChange={(e) => updateApplicationStatus(app.id, e.target.value)}
+                            className="text-sm border border-gray-300 rounded px-2 py-1"
+                          >
+                            <option value="pending">Pending</option>
+                            <option value="in_review">In Review</option>
+                            <option value="approved">Approved</option>
+                            <option value="denied">Denied</option>
+                          </select>
+                          <button
+                            onClick={() => deleteApplication(app.id)}
+                            className="text-red-600 hover:text-red-700 text-sm"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <span className="font-medium text-gray-700">Sport:</span>{" "}
+                          <span className="text-gray-600">{app.sport}</span>
+                        </div>
+                        <div>
+                          <span className="font-medium text-gray-700">Submitted:</span>{" "}
+                          <span className="text-gray-600">{new Date(app.created_at).toLocaleDateString()}</span>
+                        </div>
+                      </div>
+                      <div className="mt-3">
+                        <p className="text-sm font-medium text-gray-700">Support Needed:</p>
+                        <p className="text-sm text-gray-600 mt-1">{app.need}</p>
+                      </div>
+                      {app.story && (
+                        <div className="mt-3">
+                          <p className="text-sm font-medium text-gray-700">Their Story:</p>
+                          <p className="text-sm text-gray-600 mt-1">{app.story}</p>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Referrals Tab */}
+          {activeTab === "referrals" && (
+            <div>
+              {referrals.length === 0 ? (
+                <p className="text-gray-500 text-center py-8">
+                  No patient referrals yet.
+                </p>
+              ) : (
+                <div className="space-y-4">
+                  {referrals.map((ref) => (
+                    <div
+                      key={ref.id}
+                      className="border border-gray-200 rounded-lg p-4"
+                    >
+                      <div className="flex justify-between items-start mb-3">
+                        <div>
+                          <h3 className="font-semibold text-gray-900">Patient: {ref.patient_name}</h3>
+                          <p className="text-sm text-gray-600">
+                            Referred by: {ref.referrer_name} ({ref.referrer_email})
+                          </p>
+                          {ref.referrer_organization && (
+                            <p className="text-sm text-gray-500">
+                              {ref.referrer_organization} {ref.referrer_role && `- ${ref.referrer_role}`}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-xs px-2 py-1 rounded-full ${getStatusColor(ref.status)}`}>
+                            {ref.status}
+                          </span>
+                          <select
+                            value={ref.status}
+                            onChange={(e) => updateReferralStatus(ref.id, e.target.value)}
+                            className="text-sm border border-gray-300 rounded px-2 py-1"
+                          >
+                            <option value="pending">Pending</option>
+                            <option value="contacted">Contacted</option>
+                            <option value="enrolled">Enrolled</option>
+                            <option value="closed">Closed</option>
+                          </select>
+                          <button
+                            onClick={() => deleteReferral(ref.id)}
+                            className="text-red-600 hover:text-red-700 text-sm"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        {ref.patient_email && (
+                          <div>
+                            <span className="font-medium text-gray-700">Patient Email:</span>{" "}
+                            <span className="text-gray-600">{ref.patient_email}</span>
+                          </div>
+                        )}
+                        {ref.patient_phone && (
+                          <div>
+                            <span className="font-medium text-gray-700">Patient Phone:</span>{" "}
+                            <span className="text-gray-600">{ref.patient_phone}</span>
+                          </div>
+                        )}
+                        <div>
+                          <span className="font-medium text-gray-700">Submitted:</span>{" "}
+                          <span className="text-gray-600">{new Date(ref.created_at).toLocaleDateString()}</span>
+                        </div>
+                      </div>
+                      <div className="mt-3">
+                        <p className="text-sm font-medium text-gray-700">Patient Needs:</p>
+                        <p className="text-sm text-gray-600 mt-1">{ref.patient_needs}</p>
+                      </div>
+                      {ref.additional_info && (
+                        <div className="mt-3">
+                          <p className="text-sm font-medium text-gray-700">Additional Info:</p>
+                          <p className="text-sm text-gray-600 mt-1">{ref.additional_info}</p>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </section>
 
         {/* Events Section */}
