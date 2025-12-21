@@ -1,11 +1,10 @@
 import { Metadata } from "next";
-import Link from "next/link";
 import { getSetting } from "@/lib/db";
 
 export const metadata: Metadata = {
   title: "Donate | AdaptToLife",
   description:
-    "Support AdaptToLife with a tax-deductible donation. Help us provide adaptive sports programs and equipment for individuals with physical disabilities.",
+    "Support AdaptToLife with a tax-deductible donation. 100% of donations to our Athlete Deployment Fund go directly to athletes.",
 };
 
 // Revalidate every 60 seconds
@@ -26,167 +25,92 @@ export default async function DonatePage() {
   const donationUrl = await getDonationUrl();
 
   return (
-    <div className="bg-gray-50 min-h-screen">
-      {/* Header */}
-      <section className="bg-gradient-to-br from-blue-600 to-blue-800 text-white py-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h1 className="text-4xl md:text-5xl font-bold mb-4">
-            Support Our Mission
+    <div>
+      {/* Hero */}
+      <section className="py-24 md:py-32 bg-white">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          <h1 className="text-5xl md:text-7xl font-bold text-black mb-8">
+            Fund the Pathway.
           </h1>
-          <p className="text-xl text-blue-100 max-w-2xl mx-auto">
-            Your donation helps individuals with physical disabilities
-            participate in adaptive sports and live active, fulfilling lives.
+          <p className="text-xl md:text-2xl text-black max-w-3xl mx-auto">
+            Every dollar you give brings another athlete from the sidelines to the game.
           </p>
         </div>
       </section>
 
-      {/* Donation Section */}
-      <section className="py-16">
+      {/* 100% Promise */}
+      <section className="py-16 md:py-24 bg-black">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          <h2 className="text-3xl md:text-5xl font-bold text-white mb-8">
+            Our 100% to Athletes Promise
+          </h2>
+          <p className="text-lg md:text-xl text-white leading-relaxed mb-10">
+            One hundred percent of all public donations designated for our Athlete Deployment Fund go directly to athlete support. No overhead. No exceptions.
+          </p>
+          <a
+            href={donationUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-block bg-[#FF6B35] text-white px-12 py-4 rounded-full font-semibold text-lg hover:bg-[#e55a2a] transition-colors"
+          >
+            Donate Now
+          </a>
+          <p className="text-sm text-gray-400 mt-4">
+            You will be redirected to our secure donation form on Zeffy (0% fees).
+          </p>
+        </div>
+      </section>
+
+      {/* Impact Section */}
+      <section className="py-16 md:py-24 bg-white">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
-            <div className="p-8 md:p-12">
-              <div className="text-center mb-8">
-                <h2 className="text-2xl font-bold text-gray-900 mb-4">
-                  Make a Donation
-                </h2>
-                <p className="text-gray-600">
-                  100% of your donation goes directly to our programs. We use
-                  Zeffy, a platform that charges non-profits zero fees.
-                </p>
-              </div>
-
-              <div className="text-center">
-                <a
-                  href={donationUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-block bg-orange-500 text-white px-12 py-4 rounded-full font-semibold text-lg hover:bg-orange-600 transition-colors shadow-lg hover:shadow-xl"
-                >
-                  Donate Now
-                </a>
-                <p className="text-sm text-gray-500 mt-4">
-                  You will be redirected to our secure donation form on Zeffy.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Impact Section */}
-          <div className="mt-12 grid md:grid-cols-3 gap-6">
-            <div className="bg-white rounded-xl p-6 text-center shadow-md">
-              <div className="text-3xl font-bold text-blue-600 mb-2">$25</div>
-              <p className="text-gray-600">
-                Provides basketball equipment for one practice session
+          <h2 className="text-3xl md:text-4xl font-bold text-black text-center mb-16">
+            Your Impact
+          </h2>
+          <div className="grid md:grid-cols-3 gap-8">
+            <div className="text-center border border-[#E5E5E5] rounded-lg p-8">
+              <div className="text-5xl font-bold text-[#FF6B35] mb-4">$100</div>
+              <p className="text-black">
+                Covers registration fees for a new athlete&apos;s first season
               </p>
             </div>
-            <div className="bg-white rounded-xl p-6 text-center shadow-md">
-              <div className="text-3xl font-bold text-blue-600 mb-2">$100</div>
-              <p className="text-gray-600">
-                Sponsors a participant for one month of programs
+            <div className="text-center border border-[#E5E5E5] rounded-lg p-8">
+              <div className="text-5xl font-bold text-[#FF6B35] mb-4">$500</div>
+              <p className="text-black">
+                Funds travel expenses for a rural athlete to reach programs
               </p>
             </div>
-            <div className="bg-white rounded-xl p-6 text-center shadow-md">
-              <div className="text-3xl font-bold text-blue-600 mb-2">$500</div>
-              <p className="text-gray-600">
-                Helps purchase a sport wheelchair for our lending program
+            <div className="text-center border border-[#E5E5E5] rounded-lg p-8">
+              <div className="text-5xl font-bold text-[#FF6B35] mb-4">$2,500</div>
+              <p className="text-black">
+                Provides a sport wheelchair for an athlete in need
               </p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Why Donate Section */}
-      <section className="py-16 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h2 className="text-3xl font-bold text-gray-900 text-center mb-12">
+      {/* Where Your Money Goes */}
+      <section className="py-16 md:py-24 bg-white border-t border-[#E5E5E5]">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+          <h2 className="text-3xl md:text-4xl font-bold text-black text-center mb-16">
             Where Your Donation Goes
           </h2>
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
-            <div className="text-center">
-              <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg
-                  className="w-8 h-8 text-orange-600"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
-                  />
-                </svg>
-              </div>
-              <h3 className="font-semibold text-gray-900 mb-2">Equipment</h3>
-              <p className="text-gray-600 text-sm">
-                Sport wheelchairs, basketballs, and adaptive fitness equipment
+          <div className="grid md:grid-cols-2 gap-12">
+            <div>
+              <h3 className="text-xl font-bold text-black mb-4">
+                Athlete Deployment Fund
+              </h3>
+              <p className="text-black">
+                Direct grants to athletes for equipment, program fees, and travel expenses. This is the final bridge from the sidelines to the game.
               </p>
             </div>
-
-            <div className="text-center">
-              <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg
-                  className="w-8 h-8 text-blue-600"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"
-                  />
-                </svg>
-              </div>
-              <h3 className="font-semibold text-gray-900 mb-2">Coaching</h3>
-              <p className="text-gray-600 text-sm">
-                Professional coaches and trainers for all our programs
-              </p>
-            </div>
-
-            <div className="text-center">
-              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg
-                  className="w-8 h-8 text-green-600"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
-                  />
-                </svg>
-              </div>
-              <h3 className="font-semibold text-gray-900 mb-2">Facilities</h3>
-              <p className="text-gray-600 text-sm">
-                Accessible venue rentals for practices and events
-              </p>
-            </div>
-
-            <div className="text-center">
-              <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg
-                  className="w-8 h-8 text-purple-600"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"
-                  />
-                </svg>
-              </div>
-              <h3 className="font-semibold text-gray-900 mb-2">Scholarships</h3>
-              <p className="text-gray-600 text-sm">
-                Financial assistance for participants who need support
+            <div>
+              <h3 className="text-xl font-bold text-black mb-4">
+                Education & Discovery
+              </h3>
+              <p className="text-black">
+                Building and maintaining our free educational resources and the AdaptiveSportsNearMe.com directory that connects families to programs.
               </p>
             </div>
           </div>
@@ -194,64 +118,82 @@ export default async function DonatePage() {
       </section>
 
       {/* Tax Info */}
-      <section className="py-12 bg-gray-100">
+      <section className="py-12 bg-white border-t border-[#E5E5E5]">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <p className="text-gray-600">
-            <strong>AdaptToLife</strong> is a registered 501(c)(3) non-profit
-            organization. All donations are tax-deductible to the extent allowed
-            by law. You will receive a receipt for your records.
+          <p className="text-black">
+            <strong>AdaptToLife</strong> is a registered 501(c)(3) non-profit organization. All donations are tax-deductible to the extent allowed by law. You will receive a receipt for your records.
           </p>
         </div>
       </section>
 
       {/* Other Ways to Help */}
-      <section className="py-16 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h2 className="text-2xl font-bold text-gray-900 mb-8">
+      <section className="py-16 md:py-24 bg-white border-t border-[#E5E5E5]">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          <h2 className="text-3xl md:text-4xl font-bold text-black mb-12">
             Other Ways to Support
           </h2>
-          <div className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
-            <div className="p-6">
-              <h3 className="font-semibold text-gray-900 mb-2">Volunteer</h3>
-              <p className="text-gray-600 text-sm mb-4">
-                Help at events, coach, or assist with administrative tasks.
+          <div className="grid md:grid-cols-3 gap-8">
+            <div>
+              <h3 className="font-bold text-black mb-2">Volunteer</h3>
+              <p className="text-black text-sm mb-4">
+                Help at events, contribute expertise, or assist with outreach.
               </p>
-              <Link
-                href="/about#volunteer"
-                className="text-blue-600 font-medium hover:text-blue-700"
+              <a
+                href="mailto:volunteer@adapttolife.org"
+                className="text-black font-medium hover:text-[#FF6B35] underline underline-offset-4"
               >
-                Learn More &rarr;
-              </Link>
+                Get Involved →
+              </a>
             </div>
-            <div className="p-6">
-              <h3 className="font-semibold text-gray-900 mb-2">
+            <div>
+              <h3 className="font-bold text-black mb-2">
                 Corporate Sponsorship
               </h3>
-              <p className="text-gray-600 text-sm mb-4">
+              <p className="text-black text-sm mb-4">
                 Partner with us to make a bigger impact in the community.
               </p>
               <a
-                href="mailto:info@adapttolife.org"
-                className="text-blue-600 font-medium hover:text-blue-700"
+                href="mailto:partnerships@adapttolife.org"
+                className="text-black font-medium hover:text-[#FF6B35] underline underline-offset-4"
               >
-                Contact Us &rarr;
+                Partner With Us →
               </a>
             </div>
-            <div className="p-6">
-              <h3 className="font-semibold text-gray-900 mb-2">
+            <div>
+              <h3 className="font-bold text-black mb-2">
                 Equipment Donation
               </h3>
-              <p className="text-gray-600 text-sm mb-4">
-                Donate sport wheelchairs or adaptive equipment.
+              <p className="text-black text-sm mb-4">
+                Donate sport wheelchairs or other adaptive equipment.
               </p>
               <a
-                href="mailto:info@adapttolife.org"
-                className="text-blue-600 font-medium hover:text-blue-700"
+                href="mailto:equipment@adapttolife.org"
+                className="text-black font-medium hover:text-[#FF6B35] underline underline-offset-4"
               >
-                Get in Touch &rarr;
+                Learn More →
               </a>
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* Final CTA */}
+      <section className="py-16 md:py-24 bg-black">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          <h2 className="text-3xl md:text-4xl font-bold text-white mb-6">
+            Ready to Make a Difference?
+          </h2>
+          <p className="text-lg text-white mb-8">
+            Your support changes lives. Help us get the next athlete in the game.
+          </p>
+          <a
+            href={donationUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-block bg-[#FF6B35] text-white px-12 py-4 rounded-full font-semibold text-lg hover:bg-[#e55a2a] transition-colors"
+          >
+            Donate Today
+          </a>
         </div>
       </section>
     </div>
