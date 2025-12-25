@@ -2,6 +2,7 @@ import { Metadata } from "next";
 import { getEvents, DbEvent, FormField } from "@/lib/db";
 import { upcomingEvents as staticEvents } from "@/data/events";
 import EventCard from "./EventCard";
+import EventHostingCTA from "./EventHostingCTA";
 
 export const metadata: Metadata = {
   title: "Events | AdaptToLife",
@@ -95,24 +96,7 @@ export default async function EventsPage() {
       </section>
 
       {/* Contact Section */}
-      <section className="py-16 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">
-            Want to Host an Event?
-          </h2>
-          <p className="text-gray-600 mb-6 max-w-2xl mx-auto">
-            We&apos;re always looking for partners and venues to expand our
-            programs. If you&apos;re interested in hosting an adaptive sports
-            event, we&apos;d love to hear from you.
-          </p>
-          <a
-            href="mailto:info@adapttolife.org"
-            className="inline-block bg-[#FF6B35] text-white px-8 py-3 rounded-full font-semibold hover:bg-[#e55a2a] transition-colors"
-          >
-            Contact Us
-          </a>
-        </div>
-      </section>
+      <EventHostingCTA />
     </div>
   );
 }

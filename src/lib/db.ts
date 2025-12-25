@@ -579,6 +579,22 @@ export async function initializeFormTables() {
       ],
       submit_button_text: "Submit Donation",
       success_message: "Thank you for your generous equipment donation! We'll review and contact you to arrange pickup or drop-off details."
+    },
+    {
+      form_type: "event_hosting",
+      title: "Host an Event",
+      description: "Interested in hosting an adaptive sports event? Tell us about your venue and we'll get in touch to discuss partnership opportunities.",
+      fields: [
+        { id: "name", type: "text", label: "Contact Name", placeholder: "Your name", required: true },
+        { id: "organization", type: "text", label: "Organization/Venue Name", placeholder: "Your organization or venue", required: true },
+        { id: "email", type: "email", label: "Email Address", placeholder: "your@email.com", required: true },
+        { id: "phone", type: "phone", label: "Phone Number", placeholder: "(555) 123-4567", required: true },
+        { id: "venue_type", type: "select", label: "Venue Type", required: true, options: ["Indoor Sports Facility", "Outdoor Sports Field", "Community Center", "School/University", "Recreation Center", "Pool/Aquatic Center", "Other"] },
+        { id: "capacity", type: "text", label: "Approximate Capacity", placeholder: "e.g., 50-100 people", required: false },
+        { id: "message", type: "textarea", label: "Tell us about your interest", placeholder: "Share details about your venue and what type of event you'd like to host...", required: true }
+      ],
+      submit_button_text: "Submit Inquiry",
+      success_message: "Thank you for your interest in hosting an event! Our team will review your inquiry and reach out within 2-3 business days to discuss partnership opportunities."
     }
   ];
 
