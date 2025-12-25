@@ -10,6 +10,25 @@ interface DynamicFormModalProps {
   triggerButtonText?: string;
 }
 
+// Validation helpers
+const validateEmail = (email: string): boolean => {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+};
+
+const validatePhone = (phone: string): boolean => {
+  // Allow various phone formats
+  return /^[\d\s\-\+\(\)\.]{7,20}$/.test(phone.replace(/\s/g, ""));
+};
+
+const formatPhone = (value: string): string => {
+  // Remove all non-digits
+  const digits = value.replace(/\D/g, "");
+  // Format as (XXX) XXX-XXXX for US numbers
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
+  return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6, 10)}`;
+};
+
 export default function DynamicFormModal({
   formType,
   isOpen,
@@ -17,16 +36,21 @@ export default function DynamicFormModal({
 }: DynamicFormModalProps) {
   const [config, setConfig] = useState<FormConfig | null>(null);
   const [formData, setFormData] = useState<Record<string, string>>({});
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [honeypot, setHoneypot] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState<{
     type: "success" | "error";
     message: string;
+    referenceId?: number;
   } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     if (isOpen && formType) {
       setIsLoading(true);
+      setSubmitStatus(null);
+      setFieldErrors({});
       fetch(`/api/form-configs?form_type=${formType}`)
         .then((res) => res.json())
         .then((data) => {
@@ -49,12 +73,54 @@ export default function DynamicFormModal({
     }
   }, [isOpen, formType]);
 
-  const handleInputChange = (fieldId: string, value: string) => {
+  const handleInputChange = (fieldId: string, value: string, fieldType?: string) => {
+    // Format phone numbers as user types
+    if (fieldType === "phone") {
+      value = formatPhone(value);
+    }
     setFormData((prev) => ({ ...prev, [fieldId]: value }));
+    // Clear error when user starts typing
+    if (fieldErrors[fieldId]) {
+      setFieldErrors((prev) => {
+        const newErrors = { ...prev };
+        delete newErrors[fieldId];
+        return newErrors;
+      });
+    }
+  };
+
+  const validateField = (field: FormField, value: string): string | null => {
+    if (field.required && !value.trim()) {
+      return `${field.label} is required`;
+    }
+    if (value && field.type === "email" && !validateEmail(value)) {
+      return "Please enter a valid email address";
+    }
+    if (value && field.type === "phone" && !validatePhone(value)) {
+      return "Please enter a valid phone number";
+    }
+    return null;
+  };
+
+  const validateForm = (): boolean => {
+    const errors: Record<string, string> = {};
+    config?.fields?.forEach((field) => {
+      const error = validateField(field, formData[field.id] || "");
+      if (error) {
+        errors[field.id] = error;
+      }
+    });
+    setFieldErrors(errors);
+    return Object.keys(errors).length === 0;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!validateForm()) {
+      return;
+    }
+
     setIsSubmitting(true);
     setSubmitStatus(null);
 
@@ -65,19 +131,18 @@ export default function DynamicFormModal({
         body: JSON.stringify({
           form_type: formType,
           data: formData,
+          _honeypot: honeypot, // Send honeypot value
         }),
       });
 
       const result = await res.json();
 
       if (res.ok) {
-        setSubmitStatus({ type: "success", message: result.message });
-        // Reset form after success
-        setTimeout(() => {
-          onClose();
-          setFormData({});
-          setSubmitStatus(null);
-        }, 3000);
+        setSubmitStatus({
+          type: "success",
+          message: result.message,
+          referenceId: result.submission?.id
+        });
       } else {
         setSubmitStatus({ type: "error", message: result.error });
       }
@@ -88,9 +153,22 @@ export default function DynamicFormModal({
     }
   };
 
+  const handleClose = () => {
+    onClose();
+    // Reset form state after a small delay to allow animation
+    setTimeout(() => {
+      setFormData({});
+      setFieldErrors({});
+      setSubmitStatus(null);
+      setHoneypot("");
+    }, 300);
+  };
+
   const renderField = (field: FormField) => {
-    const baseInputClasses =
-      "w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF6B35] focus:border-[#FF6B35] transition-colors";
+    const hasError = !!fieldErrors[field.id];
+    const baseInputClasses = `w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-[#FF6B35] focus:border-[#FF6B35] transition-colors ${
+      hasError ? "border-red-500 bg-red-50" : "border-gray-300"
+    }`;
 
     switch (field.type) {
       case "textarea":
@@ -100,7 +178,6 @@ export default function DynamicFormModal({
             value={formData[field.id] || ""}
             onChange={(e) => handleInputChange(field.id, e.target.value)}
             placeholder={field.placeholder}
-            required={field.required}
             rows={4}
             className={baseInputClasses}
           />
@@ -112,7 +189,6 @@ export default function DynamicFormModal({
             id={field.id}
             value={formData[field.id] || ""}
             onChange={(e) => handleInputChange(field.id, e.target.value)}
-            required={field.required}
             className={baseInputClasses}
           >
             <option value="">Select an option...</option>
@@ -134,7 +210,6 @@ export default function DynamicFormModal({
               onChange={(e) =>
                 handleInputChange(field.id, e.target.checked.toString())
               }
-              required={field.required}
               className="w-5 h-5 text-[#FF6B35] border-gray-300 rounded focus:ring-[#FF6B35]"
             />
             <span className="text-gray-700">{field.label}</span>
@@ -147,9 +222,8 @@ export default function DynamicFormModal({
             type={field.type === "email" ? "email" : field.type === "phone" ? "tel" : "text"}
             id={field.id}
             value={formData[field.id] || ""}
-            onChange={(e) => handleInputChange(field.id, e.target.value)}
+            onChange={(e) => handleInputChange(field.id, e.target.value, field.type)}
             placeholder={field.placeholder}
-            required={field.required}
             className={baseInputClasses}
           />
         );
@@ -167,7 +241,7 @@ export default function DynamicFormModal({
             {config?.title || "Loading..."}
           </h2>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="text-gray-400 hover:text-gray-600 transition-colors"
             aria-label="Close"
           >
@@ -191,7 +265,19 @@ export default function DynamicFormModal({
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
               </div>
-              <p className="text-gray-700 text-lg">{submitStatus.message}</p>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">Submission Received!</h3>
+              <p className="text-gray-600 mb-4">{submitStatus.message}</p>
+              {submitStatus.referenceId && submitStatus.referenceId > 0 && (
+                <p className="text-sm text-gray-500 bg-gray-100 inline-block px-4 py-2 rounded-full">
+                  Reference #: <span className="font-mono font-semibold">{submitStatus.referenceId}</span>
+                </p>
+              )}
+              <button
+                onClick={handleClose}
+                className="mt-6 text-[#FF6B35] font-medium hover:text-[#e55a2a] transition-colors"
+              >
+                Close
+              </button>
             </div>
           ) : (
             <>
@@ -200,12 +286,29 @@ export default function DynamicFormModal({
               )}
 
               {submitStatus?.type === "error" && (
-                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4">
-                  {submitStatus.message}
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4 flex items-start gap-2">
+                  <svg className="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span>{submitStatus.message}</span>
                 </div>
               )}
 
               <form onSubmit={handleSubmit} className="space-y-4">
+                {/* Honeypot field - hidden from users, visible to bots */}
+                <div className="absolute -left-[9999px]" aria-hidden="true">
+                  <label htmlFor="_website">Website</label>
+                  <input
+                    type="text"
+                    id="_website"
+                    name="_website"
+                    value={honeypot}
+                    onChange={(e) => setHoneypot(e.target.value)}
+                    tabIndex={-1}
+                    autoComplete="off"
+                  />
+                </div>
+
                 {config?.fields?.map((field) => (
                   <div key={field.id}>
                     {field.type !== "checkbox" && (
@@ -218,7 +321,15 @@ export default function DynamicFormModal({
                       </label>
                     )}
                     {renderField(field)}
-                    {field.helpText && (
+                    {fieldErrors[field.id] && (
+                      <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        {fieldErrors[field.id]}
+                      </p>
+                    )}
+                    {field.helpText && !fieldErrors[field.id] && (
                       <p className="mt-1 text-sm text-gray-500">{field.helpText}</p>
                     )}
                   </div>

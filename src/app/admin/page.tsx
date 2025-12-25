@@ -2,7 +2,7 @@
 
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { DbEvent, GrantApplication, Referral, FormSubmission, FormConfig, FormField } from "@/lib/db";
 
 type EventFormData = Omit<DbEvent, "id" | "created_at" | "updated_at">;
@@ -50,6 +50,16 @@ export default function AdminPage() {
   // Form config editing state
   const [editingFormConfig, setEditingFormConfig] = useState<FormConfig | null>(null);
   const [showFormEditor, setShowFormEditor] = useState(false);
+
+  // Filter state for messages
+  const [messageFilters, setMessageFilters] = useState({
+    formType: "all",
+    status: "all",
+    search: "",
+  });
+
+  // Notes editing state
+  const [editingNotes, setEditingNotes] = useState<{ id: number; notes: string; type: "submission" | "application" | "referral" } | null>(null);
 
   const fetchData = useCallback(async () => {
     try {
@@ -110,6 +120,156 @@ export default function AdminPage() {
   const showMessage = (type: "success" | "error", text: string) => {
     setMessage({ type, text });
     setTimeout(() => setMessage(null), 3000);
+  };
+
+  // Filtered submissions
+  const filteredSubmissions = useMemo(() => {
+    return formSubmissions.filter((s) => {
+      if (messageFilters.formType !== "all" && s.form_type !== messageFilters.formType) return false;
+      if (messageFilters.status !== "all" && s.status !== messageFilters.status) return false;
+      if (messageFilters.search) {
+        const searchLower = messageFilters.search.toLowerCase();
+        const data = s.data as Record<string, string>;
+        const matchesSearch = Object.values(data).some(
+          (v) => typeof v === "string" && v.toLowerCase().includes(searchLower)
+        );
+        if (!matchesSearch) return false;
+      }
+      return true;
+    });
+  }, [formSubmissions, messageFilters]);
+
+  // CSV Export function
+  const exportToCSV = (dataType: "messages" | "applications" | "referrals") => {
+    let csvContent = "";
+    let filename = "";
+
+    if (dataType === "messages") {
+      const data = filteredSubmissions;
+      if (data.length === 0) return;
+
+      // Get all unique field keys from all submissions
+      const allKeys = new Set<string>();
+      data.forEach((s) => {
+        Object.keys(s.data as Record<string, unknown>).forEach((k) => allKeys.add(k));
+      });
+      const fieldKeys = Array.from(allKeys);
+
+      // CSV header
+      csvContent = ["ID", "Form Type", "Status", "Date", ...fieldKeys, "Notes"].join(",") + "\n";
+
+      // CSV rows
+      data.forEach((s) => {
+        const rowData = s.data as Record<string, string>;
+        const row = [
+          s.id,
+          s.form_type,
+          s.status,
+          new Date(s.created_at).toLocaleDateString(),
+          ...fieldKeys.map((k) => `"${(rowData[k] || "").replace(/"/g, '""')}"`),
+          `"${(s.notes || "").replace(/"/g, '""')}"`,
+        ];
+        csvContent += row.join(",") + "\n";
+      });
+
+      filename = `form-submissions-${new Date().toISOString().split("T")[0]}.csv`;
+    } else if (dataType === "applications") {
+      if (applications.length === 0) return;
+
+      csvContent = ["ID", "Name", "Email", "Phone", "Sport", "Need", "Story", "Status", "Notes", "Date"].join(",") + "\n";
+
+      applications.forEach((a) => {
+        const row = [
+          a.id,
+          `"${a.name}"`,
+          `"${a.email}"`,
+          `"${a.phone || ""}"`,
+          `"${a.sport}"`,
+          `"${a.need.replace(/"/g, '""')}"`,
+          `"${(a.story || "").replace(/"/g, '""')}"`,
+          a.status,
+          `"${(a.notes || "").replace(/"/g, '""')}"`,
+          new Date(a.created_at).toLocaleDateString(),
+        ];
+        csvContent += row.join(",") + "\n";
+      });
+
+      filename = `grant-applications-${new Date().toISOString().split("T")[0]}.csv`;
+    } else if (dataType === "referrals") {
+      if (referrals.length === 0) return;
+
+      csvContent = [
+        "ID", "Patient Name", "Patient Email", "Patient Phone",
+        "Referrer Name", "Referrer Email", "Referrer Org", "Referrer Role",
+        "Patient Needs", "Additional Info", "Status", "Notes", "Date"
+      ].join(",") + "\n";
+
+      referrals.forEach((r) => {
+        const row = [
+          r.id,
+          `"${r.patient_name}"`,
+          `"${r.patient_email || ""}"`,
+          `"${r.patient_phone || ""}"`,
+          `"${r.referrer_name}"`,
+          `"${r.referrer_email}"`,
+          `"${r.referrer_organization || ""}"`,
+          `"${r.referrer_role || ""}"`,
+          `"${r.patient_needs.replace(/"/g, '""')}"`,
+          `"${(r.additional_info || "").replace(/"/g, '""')}"`,
+          r.status,
+          `"${(r.notes || "").replace(/"/g, '""')}"`,
+          new Date(r.created_at).toLocaleDateString(),
+        ];
+        csvContent += row.join(",") + "\n";
+      });
+
+      filename = `patient-referrals-${new Date().toISOString().split("T")[0]}.csv`;
+    }
+
+    // Download
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = filename;
+    link.click();
+  };
+
+  // Save notes
+  const saveNotes = async () => {
+    if (!editingNotes) return;
+
+    try {
+      let url = "";
+      if (editingNotes.type === "submission") {
+        url = `/api/form-submissions/${editingNotes.id}`;
+      } else if (editingNotes.type === "application") {
+        url = `/api/applications/${editingNotes.id}`;
+      } else {
+        url = `/api/referrals/${editingNotes.id}`;
+      }
+
+      const res = await fetch(url, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notes: editingNotes.notes }),
+      });
+
+      if (res.ok) {
+        showMessage("success", "Notes saved!");
+        setEditingNotes(null);
+        fetchData();
+      } else {
+        showMessage("error", "Failed to save notes");
+      }
+    } catch {
+      showMessage("error", "Failed to save notes");
+    }
+  };
+
+  // Generate mailto link for reply
+  const getReplyMailto = (email: string, name: string, subject: string) => {
+    const body = `Hi ${name},\n\nThank you for reaching out to AdaptToLife.\n\n`;
+    return `mailto:${email}?subject=Re: ${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   };
 
   const initializeDb = async () => {
@@ -433,10 +593,9 @@ export default function AdminPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
             <div>
-              <h3 className="font-semibold text-amber-800">Email Notifications Not Configured</h3>
+              <h3 className="font-semibold text-amber-800">Email Notifications</h3>
               <p className="text-sm text-amber-700 mt-1">
-                Email notifications are not set up yet. All form submissions are saved here.
-                Please check this dashboard regularly for new messages and submissions.
+                Email notifications will be sent automatically when configured. Add <code className="bg-amber-100 px-1 rounded">RESEND_API_KEY</code> and <code className="bg-amber-100 px-1 rounded">ADMIN_NOTIFICATION_EMAILS</code> environment variables to enable.
               </p>
             </div>
           </div>
@@ -525,64 +684,143 @@ export default function AdminPage() {
             {/* Messages Tab */}
             {submissionTab === "messages" && (
               <div>
-                {formSubmissions.length === 0 ? (
+                {/* Filters */}
+                <div className="flex flex-wrap gap-4 mb-6 pb-4 border-b border-gray-100">
+                  <div className="flex-1 min-w-[200px]">
+                    <input
+                      type="text"
+                      placeholder="Search messages..."
+                      value={messageFilters.search}
+                      onChange={(e) => setMessageFilters({ ...messageFilters, search: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <select
+                    value={messageFilters.formType}
+                    onChange={(e) => setMessageFilters({ ...messageFilters, formType: e.target.value })}
+                    className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                  >
+                    <option value="all">All Types</option>
+                    <option value="contact">Contact</option>
+                    <option value="volunteer">Volunteer</option>
+                    <option value="corporate_sponsorship">Corporate Sponsorship</option>
+                    <option value="equipment_donation">Equipment Donation</option>
+                  </select>
+                  <select
+                    value={messageFilters.status}
+                    onChange={(e) => setMessageFilters({ ...messageFilters, status: e.target.value })}
+                    className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                  >
+                    <option value="all">All Statuses</option>
+                    <option value="new">New</option>
+                    <option value="read">Read</option>
+                    <option value="replied">Replied</option>
+                    <option value="archived">Archived</option>
+                  </select>
+                  <button
+                    onClick={() => exportToCSV("messages")}
+                    className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 flex items-center gap-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    Export CSV
+                  </button>
+                </div>
+
+                {filteredSubmissions.length === 0 ? (
                   <p className="text-gray-500 text-center py-8">
-                    No messages yet. Form submissions will appear here.
+                    {formSubmissions.length === 0 ? "No messages yet." : "No messages match your filters."}
                   </p>
                 ) : (
                   <div className="space-y-4">
-                    {formSubmissions.map((submission) => (
-                      <div
-                        key={submission.id}
-                        className={`border rounded-lg p-4 ${
-                          submission.status === "new" ? "border-blue-300 bg-blue-50" : "border-gray-200"
-                        }`}
-                      >
-                        <div className="flex justify-between items-start mb-3">
-                          <div>
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className="font-semibold text-gray-900">
-                                {getFormTypeLabel(submission.form_type)}
-                              </span>
-                              <span className={`text-xs px-2 py-1 rounded-full ${getStatusColor(submission.status)}`}>
-                                {submission.status}
-                              </span>
+                    {filteredSubmissions.map((submission) => {
+                      const data = submission.data as Record<string, string>;
+                      const email = data.email || "";
+                      const name = data.name || data.contact_name || "Unknown";
+                      const subject = data.subject || getFormTypeLabel(submission.form_type);
+
+                      return (
+                        <div
+                          key={submission.id}
+                          className={`border rounded-lg p-4 ${
+                            submission.status === "new" ? "border-blue-300 bg-blue-50" : "border-gray-200"
+                          }`}
+                        >
+                          <div className="flex justify-between items-start mb-3">
+                            <div>
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="font-semibold text-gray-900">
+                                  {getFormTypeLabel(submission.form_type)}
+                                </span>
+                                <span className="text-gray-400">#{submission.id}</span>
+                                <span className={`text-xs px-2 py-1 rounded-full ${getStatusColor(submission.status)}`}>
+                                  {submission.status}
+                                </span>
+                              </div>
+                              <p className="text-sm text-gray-500">
+                                {new Date(submission.created_at).toLocaleString()}
+                              </p>
                             </div>
-                            <p className="text-sm text-gray-500">
-                              {new Date(submission.created_at).toLocaleString()}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <select
-                              value={submission.status}
-                              onChange={(e) => updateSubmissionStatus(submission.id, e.target.value)}
-                              className="text-sm border border-gray-300 rounded px-2 py-1"
-                            >
-                              <option value="new">New</option>
-                              <option value="read">Read</option>
-                              <option value="replied">Replied</option>
-                              <option value="archived">Archived</option>
-                            </select>
-                            <button
-                              onClick={() => deleteSubmission(submission.id)}
-                              className="text-red-600 hover:text-red-700 text-sm"
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                          {Object.entries(submission.data as Record<string, string>).map(([key, value]) => (
-                            <div key={key} className={key === "message" || key === "description" || key === "experience" ? "md:col-span-2" : ""}>
-                              <span className="font-medium text-gray-700 capitalize">
-                                {key.replace(/_/g, " ")}:
-                              </span>{" "}
-                              <span className="text-gray-600 whitespace-pre-wrap">{value}</span>
+                            <div className="flex items-center gap-2">
+                              {email && (
+                                <a
+                                  href={getReplyMailto(email, name, subject)}
+                                  className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 flex items-center gap-1"
+                                >
+                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                  </svg>
+                                  Reply
+                                </a>
+                              )}
+                              <select
+                                value={submission.status}
+                                onChange={(e) => updateSubmissionStatus(submission.id, e.target.value)}
+                                className="text-sm border border-gray-300 rounded px-2 py-1"
+                              >
+                                <option value="new">New</option>
+                                <option value="read">Read</option>
+                                <option value="replied">Replied</option>
+                                <option value="archived">Archived</option>
+                              </select>
+                              <button
+                                onClick={() => setEditingNotes({ id: submission.id, notes: submission.notes || "", type: "submission" })}
+                                className="text-gray-600 hover:text-gray-700 text-sm"
+                                title="Add notes"
+                              >
+                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                </svg>
+                              </button>
+                              <button
+                                onClick={() => deleteSubmission(submission.id)}
+                                className="text-red-600 hover:text-red-700 text-sm"
+                              >
+                                Delete
+                              </button>
                             </div>
-                          ))}
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                            {Object.entries(data).map(([key, value]) => (
+                              <div key={key} className={key === "message" || key === "description" || key === "experience" ? "md:col-span-2" : ""}>
+                                <span className="font-medium text-gray-700 capitalize">
+                                  {key.replace(/_/g, " ")}:
+                                </span>{" "}
+                                <span className="text-gray-600 whitespace-pre-wrap">{value}</span>
+                              </div>
+                            ))}
+                          </div>
+                          {submission.notes && (
+                            <div className="mt-3 pt-3 border-t border-gray-200">
+                              <p className="text-sm text-gray-600">
+                                <span className="font-medium">Notes:</span> {submission.notes}
+                              </p>
+                            </div>
+                          )}
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -591,6 +829,17 @@ export default function AdminPage() {
             {/* Applications Tab */}
             {submissionTab === "applications" && (
               <div>
+                <div className="flex justify-end mb-4">
+                  <button
+                    onClick={() => exportToCSV("applications")}
+                    className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 flex items-center gap-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    Export CSV
+                  </button>
+                </div>
                 {applications.length === 0 ? (
                   <p className="text-gray-500 text-center py-8">
                     No grant applications yet.
@@ -604,11 +853,23 @@ export default function AdminPage() {
                       >
                         <div className="flex justify-between items-start mb-3">
                           <div>
-                            <h3 className="font-semibold text-gray-900">{app.name}</h3>
+                            <div className="flex items-center gap-2">
+                              <h3 className="font-semibold text-gray-900">{app.name}</h3>
+                              <span className="text-gray-400">#{app.id}</span>
+                            </div>
                             <p className="text-sm text-gray-600">{app.email}</p>
                             {app.phone && <p className="text-sm text-gray-500">{app.phone}</p>}
                           </div>
                           <div className="flex items-center gap-2">
+                            <a
+                              href={getReplyMailto(app.email, app.name, "Your AdaptToLife Grant Application")}
+                              className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 flex items-center gap-1"
+                            >
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                              </svg>
+                              Reply
+                            </a>
                             <span className={`text-xs px-2 py-1 rounded-full ${getStatusColor(app.status)}`}>
                               {app.status}
                             </span>
@@ -622,6 +883,15 @@ export default function AdminPage() {
                               <option value="approved">Approved</option>
                               <option value="denied">Denied</option>
                             </select>
+                            <button
+                              onClick={() => setEditingNotes({ id: app.id, notes: app.notes || "", type: "application" })}
+                              className="text-gray-600 hover:text-gray-700"
+                              title="Add notes"
+                            >
+                              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                              </svg>
+                            </button>
                             <button
                               onClick={() => deleteApplication(app.id)}
                               className="text-red-600 hover:text-red-700 text-sm"
@@ -650,6 +920,13 @@ export default function AdminPage() {
                             <p className="text-sm text-gray-600 mt-1">{app.story}</p>
                           </div>
                         )}
+                        {app.notes && (
+                          <div className="mt-3 pt-3 border-t border-gray-200">
+                            <p className="text-sm text-gray-600">
+                              <span className="font-medium">Notes:</span> {app.notes}
+                            </p>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -660,6 +937,17 @@ export default function AdminPage() {
             {/* Referrals Tab */}
             {submissionTab === "referrals" && (
               <div>
+                <div className="flex justify-end mb-4">
+                  <button
+                    onClick={() => exportToCSV("referrals")}
+                    className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 flex items-center gap-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    Export CSV
+                  </button>
+                </div>
                 {referrals.length === 0 ? (
                   <p className="text-gray-500 text-center py-8">
                     No patient referrals yet.
@@ -673,7 +961,10 @@ export default function AdminPage() {
                       >
                         <div className="flex justify-between items-start mb-3">
                           <div>
-                            <h3 className="font-semibold text-gray-900">Patient: {ref.patient_name}</h3>
+                            <div className="flex items-center gap-2">
+                              <h3 className="font-semibold text-gray-900">Patient: {ref.patient_name}</h3>
+                              <span className="text-gray-400">#{ref.id}</span>
+                            </div>
                             <p className="text-sm text-gray-600">
                               Referred by: {ref.referrer_name} ({ref.referrer_email})
                             </p>
@@ -684,6 +975,15 @@ export default function AdminPage() {
                             )}
                           </div>
                           <div className="flex items-center gap-2">
+                            <a
+                              href={getReplyMailto(ref.referrer_email, ref.referrer_name, `Patient Referral: ${ref.patient_name}`)}
+                              className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 flex items-center gap-1"
+                            >
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                              </svg>
+                              Reply
+                            </a>
                             <span className={`text-xs px-2 py-1 rounded-full ${getStatusColor(ref.status)}`}>
                               {ref.status}
                             </span>
@@ -697,6 +997,15 @@ export default function AdminPage() {
                               <option value="enrolled">Enrolled</option>
                               <option value="closed">Closed</option>
                             </select>
+                            <button
+                              onClick={() => setEditingNotes({ id: ref.id, notes: ref.notes || "", type: "referral" })}
+                              className="text-gray-600 hover:text-gray-700"
+                              title="Add notes"
+                            >
+                              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                              </svg>
+                            </button>
                             <button
                               onClick={() => deleteReferral(ref.id)}
                               className="text-red-600 hover:text-red-700 text-sm"
@@ -731,6 +1040,13 @@ export default function AdminPage() {
                           <div className="mt-3">
                             <p className="text-sm font-medium text-gray-700">Additional Info:</p>
                             <p className="text-sm text-gray-600 mt-1">{ref.additional_info}</p>
+                          </div>
+                        )}
+                        {ref.notes && (
+                          <div className="mt-3 pt-3 border-t border-gray-200">
+                            <p className="text-sm text-gray-600">
+                              <span className="font-medium">Notes:</span> {ref.notes}
+                            </p>
                           </div>
                         )}
                       </div>
@@ -769,83 +1085,57 @@ export default function AdminPage() {
                     </h3>
                     <form onSubmit={handleEventSubmit} className="space-y-4">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Title *
-                        </label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
                         <input
                           type="text"
                           required
                           value={eventForm.title}
-                          onChange={(e) =>
-                            setEventForm({ ...eventForm, title: e.target.value })
-                          }
+                          onChange={(e) => setEventForm({ ...eventForm, title: e.target.value })}
                           className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                         />
                       </div>
 
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Date *
-                          </label>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Date *</label>
                           <input
                             type="date"
                             required
                             value={eventForm.date}
-                            onChange={(e) =>
-                              setEventForm({ ...eventForm, date: e.target.value })
-                            }
+                            onChange={(e) => setEventForm({ ...eventForm, date: e.target.value })}
                             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                           />
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Time *
-                          </label>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Time *</label>
                           <input
                             type="text"
                             required
                             placeholder="6:00 PM - 8:00 PM"
                             value={eventForm.time}
-                            onChange={(e) =>
-                              setEventForm({ ...eventForm, time: e.target.value })
-                            }
+                            onChange={(e) => setEventForm({ ...eventForm, time: e.target.value })}
                             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                           />
                         </div>
                       </div>
 
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Location *
-                        </label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Location *</label>
                         <input
                           type="text"
                           required
                           value={eventForm.location}
-                          onChange={(e) =>
-                            setEventForm({
-                              ...eventForm,
-                              location: e.target.value,
-                            })
-                          }
+                          onChange={(e) => setEventForm({ ...eventForm, location: e.target.value })}
                           className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                         />
                       </div>
 
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Category *
-                        </label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Category *</label>
                         <select
                           required
                           value={eventForm.category}
-                          onChange={(e) =>
-                            setEventForm({
-                              ...eventForm,
-                              category: e.target.value as EventFormData["category"],
-                            })
-                          }
+                          onChange={(e) => setEventForm({ ...eventForm, category: e.target.value as EventFormData["category"] })}
                           className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                         >
                           <option value="basketball">Basketball</option>
@@ -857,36 +1147,22 @@ export default function AdminPage() {
                       </div>
 
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Description *
-                        </label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Description *</label>
                         <textarea
                           required
                           rows={3}
                           value={eventForm.description}
-                          onChange={(e) =>
-                            setEventForm({
-                              ...eventForm,
-                              description: e.target.value,
-                            })
-                          }
+                          onChange={(e) => setEventForm({ ...eventForm, description: e.target.value })}
                           className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                         />
                       </div>
 
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Registration URL (optional)
-                        </label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Registration URL (optional)</label>
                         <input
                           type="url"
                           value={eventForm.registration_url}
-                          onChange={(e) =>
-                            setEventForm({
-                              ...eventForm,
-                              registration_url: e.target.value,
-                            })
-                          }
+                          onChange={(e) => setEventForm({ ...eventForm, registration_url: e.target.value })}
                           className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                         />
                       </div>
@@ -894,24 +1170,17 @@ export default function AdminPage() {
                       <div className="flex gap-4 pt-4">
                         <button
                           type="button"
-                          onClick={() => {
-                            setShowEventForm(false);
-                            setEditingEvent(null);
-                          }}
-                          className="flex-1 px-4 py-2 border border-gray-300 rounded-lg font-medium hover:bg-gray-50 transition-colors"
+                          onClick={() => { setShowEventForm(false); setEditingEvent(null); }}
+                          className="flex-1 px-4 py-2 border border-gray-300 rounded-lg font-medium hover:bg-gray-50"
                         >
                           Cancel
                         </button>
                         <button
                           type="submit"
                           disabled={isSaving}
-                          className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                          className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50"
                         >
-                          {isSaving
-                            ? "Saving..."
-                            : editingEvent
-                              ? "Update Event"
-                              : "Create Event"}
+                          {isSaving ? "Saving..." : editingEvent ? "Update Event" : "Create Event"}
                         </button>
                       </div>
                     </form>
@@ -922,43 +1191,22 @@ export default function AdminPage() {
 
             {/* Events List */}
             {events.length === 0 ? (
-              <p className="text-gray-500 text-center py-8">
-                No events yet. Click &quot;Add Event&quot; to create one.
-              </p>
+              <p className="text-gray-500 text-center py-8">No events yet. Click &quot;Add Event&quot; to create one.</p>
             ) : (
               <div className="space-y-4">
                 {events.map((event) => (
-                  <div
-                    key={event.id}
-                    className="border border-gray-200 rounded-lg p-4 flex justify-between items-start"
-                  >
+                  <div key={event.id} className="border border-gray-200 rounded-lg p-4 flex justify-between items-start">
                     <div>
                       <div className="flex items-center gap-2 mb-1">
-                        <h3 className="font-semibold text-gray-900">
-                          {event.title}
-                        </h3>
-                        <span className="text-xs px-2 py-1 bg-gray-100 rounded-full text-gray-600">
-                          {event.category}
-                        </span>
+                        <h3 className="font-semibold text-gray-900">{event.title}</h3>
+                        <span className="text-xs px-2 py-1 bg-gray-100 rounded-full text-gray-600">{event.category}</span>
                       </div>
-                      <p className="text-sm text-gray-600">
-                        {event.date} | {event.time}
-                      </p>
+                      <p className="text-sm text-gray-600">{event.date} | {event.time}</p>
                       <p className="text-sm text-gray-500">{event.location}</p>
                     </div>
                     <div className="flex gap-2">
-                      <button
-                        onClick={() => editEvent(event)}
-                        className="text-blue-600 hover:text-blue-700 font-medium text-sm"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => deleteEvent(event.id)}
-                        className="text-red-600 hover:text-red-700 font-medium text-sm"
-                      >
-                        Delete
-                      </button>
+                      <button onClick={() => editEvent(event)} className="text-blue-600 hover:text-blue-700 font-medium text-sm">Edit</button>
+                      <button onClick={() => deleteEvent(event.id)} className="text-red-600 hover:text-red-700 font-medium text-sm">Delete</button>
                     </div>
                   </div>
                 ))}
@@ -972,17 +1220,12 @@ export default function AdminPage() {
           <div className="space-y-8">
             {/* Database Setup */}
             <section className="bg-white rounded-xl shadow-md p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">
-                Database Setup
-              </h2>
-              <p className="text-gray-600 text-sm mb-4">
-                Click this button once to initialize the database tables. This is
-                safe to run multiple times.
-              </p>
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">Database Setup</h2>
+              <p className="text-gray-600 text-sm mb-4">Click this button to initialize the database tables. Safe to run multiple times.</p>
               <button
                 onClick={initializeDb}
                 disabled={isSaving}
-                className="bg-blue-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                className="bg-blue-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50"
               >
                 {isSaving ? "Initializing..." : "Initialize Database"}
               </button>
@@ -990,21 +1233,19 @@ export default function AdminPage() {
 
             {/* Donation URL */}
             <section className="bg-white rounded-xl shadow-md p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">
-                Donation Settings
-              </h2>
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">Donation Settings</h2>
               <div className="flex gap-4">
                 <input
                   type="url"
                   value={donationUrl}
                   onChange={(e) => setDonationUrl(e.target.value)}
                   placeholder="https://www.zeffy.com/donation-form/your-form"
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 />
                 <button
                   onClick={saveDonationUrl}
                   disabled={isSaving}
-                  className="bg-blue-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                  className="bg-blue-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50"
                 >
                   {isSaving ? "Saving..." : "Save"}
                 </button>
@@ -1013,18 +1254,11 @@ export default function AdminPage() {
 
             {/* Form Configuration */}
             <section className="bg-white rounded-xl shadow-md p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">
-                Form Configuration
-              </h2>
-              <p className="text-gray-600 text-sm mb-6">
-                Customize the forms used for contact, volunteer, sponsorship, and equipment donation inquiries.
-              </p>
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">Form Configuration</h2>
+              <p className="text-gray-600 text-sm mb-6">Customize the forms used for contact, volunteer, sponsorship, and equipment donation inquiries.</p>
               <div className="space-y-4">
                 {formConfigs.map((config) => (
-                  <div
-                    key={config.id}
-                    className="border border-gray-200 rounded-lg p-4 flex justify-between items-center"
-                  >
+                  <div key={config.id} className="border border-gray-200 rounded-lg p-4 flex justify-between items-center">
                     <div>
                       <div className="flex items-center gap-2">
                         <h3 className="font-semibold text-gray-900">{config.title}</h3>
@@ -1035,10 +1269,7 @@ export default function AdminPage() {
                       <p className="text-sm text-gray-500">{config.fields?.length || 0} fields</p>
                     </div>
                     <button
-                      onClick={() => {
-                        setEditingFormConfig(config);
-                        setShowFormEditor(true);
-                      }}
+                      onClick={() => { setEditingFormConfig(config); setShowFormEditor(true); }}
                       className="text-blue-600 hover:text-blue-700 font-medium text-sm"
                     >
                       Edit
@@ -1050,15 +1281,44 @@ export default function AdminPage() {
           </div>
         )}
 
+        {/* Notes Editor Modal */}
+        {editingNotes && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl max-w-lg w-full">
+              <div className="p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Edit Notes</h3>
+                <textarea
+                  value={editingNotes.notes}
+                  onChange={(e) => setEditingNotes({ ...editingNotes, notes: e.target.value })}
+                  rows={4}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  placeholder="Add internal notes here..."
+                />
+                <div className="flex gap-4 mt-4">
+                  <button
+                    onClick={() => setEditingNotes(null)}
+                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg font-medium hover:bg-gray-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={saveNotes}
+                    className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700"
+                  >
+                    Save Notes
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Form Editor Modal */}
         {showFormEditor && editingFormConfig && (
           <FormEditorModal
             config={editingFormConfig}
             onSave={saveFormConfig}
-            onClose={() => {
-              setShowFormEditor(false);
-              setEditingFormConfig(null);
-            }}
+            onClose={() => { setShowFormEditor(false); setEditingFormConfig(null); }}
             isSaving={isSaving}
           />
         )}
@@ -1118,13 +1378,8 @@ function FormEditorModal({
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
         <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
-          <h3 className="text-xl font-semibold text-gray-900">
-            Edit Form: {config.title}
-          </h3>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
-          >
+          <h3 className="text-xl font-semibold text-gray-900">Edit Form: {config.title}</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
             <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -1132,12 +1387,9 @@ function FormEditorModal({
         </div>
 
         <div className="p-6 space-y-6">
-          {/* Basic Settings */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Form Title
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Form Title</label>
               <input
                 type="text"
                 value={editedConfig.title}
@@ -1146,9 +1398,7 @@ function FormEditorModal({
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Submit Button Text
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Submit Button Text</label>
               <input
                 type="text"
                 value={editedConfig.submit_button_text}
@@ -1159,9 +1409,7 @@ function FormEditorModal({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Description
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
             <textarea
               value={editedConfig.description}
               onChange={(e) => setEditedConfig({ ...editedConfig, description: e.target.value })}
@@ -1171,9 +1419,7 @@ function FormEditorModal({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Success Message
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Success Message</label>
             <textarea
               value={editedConfig.success_message}
               onChange={(e) => setEditedConfig({ ...editedConfig, success_message: e.target.value })}
@@ -1190,21 +1436,13 @@ function FormEditorModal({
               onChange={(e) => setEditedConfig({ ...editedConfig, enabled: e.target.checked })}
               className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
             />
-            <label htmlFor="enabled" className="text-sm font-medium text-gray-700">
-              Form Enabled
-            </label>
+            <label htmlFor="enabled" className="text-sm font-medium text-gray-700">Form Enabled</label>
           </div>
 
-          {/* Fields */}
           <div>
             <div className="flex justify-between items-center mb-4">
               <h4 className="text-lg font-medium text-gray-900">Form Fields</h4>
-              <button
-                onClick={addField}
-                className="bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700"
-              >
-                + Add Field
-              </button>
+              <button onClick={addField} className="bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700">+ Add Field</button>
             </div>
 
             <div className="space-y-4">
@@ -1212,62 +1450,25 @@ function FormEditorModal({
                 <div key={field.id} className="border border-gray-200 rounded-lg p-4">
                   <div className="flex justify-between items-start mb-3">
                     <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => moveField(index, "up")}
-                        disabled={index === 0}
-                        className="text-gray-400 hover:text-gray-600 disabled:opacity-30"
-                      >
-                        ↑
-                      </button>
-                      <button
-                        onClick={() => moveField(index, "down")}
-                        disabled={index === editedConfig.fields.length - 1}
-                        className="text-gray-400 hover:text-gray-600 disabled:opacity-30"
-                      >
-                        ↓
-                      </button>
+                      <button onClick={() => moveField(index, "up")} disabled={index === 0} className="text-gray-400 hover:text-gray-600 disabled:opacity-30">↑</button>
+                      <button onClick={() => moveField(index, "down")} disabled={index === editedConfig.fields.length - 1} className="text-gray-400 hover:text-gray-600 disabled:opacity-30">↓</button>
                       <span className="text-sm text-gray-500">Field {index + 1}</span>
                     </div>
-                    <button
-                      onClick={() => removeField(index)}
-                      className="text-red-600 hover:text-red-700 text-sm"
-                    >
-                      Remove
-                    </button>
+                    <button onClick={() => removeField(index)} className="text-red-600 hover:text-red-700 text-sm">Remove</button>
                   </div>
 
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">
-                        Field ID
-                      </label>
-                      <input
-                        type="text"
-                        value={field.id}
-                        onChange={(e) => updateField(index, { id: e.target.value })}
-                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
-                      />
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Field ID</label>
+                      <input type="text" value={field.id} onChange={(e) => updateField(index, { id: e.target.value })} className="w-full px-2 py-1 text-sm border border-gray-300 rounded" />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">
-                        Label
-                      </label>
-                      <input
-                        type="text"
-                        value={field.label}
-                        onChange={(e) => updateField(index, { label: e.target.value })}
-                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
-                      />
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Label</label>
+                      <input type="text" value={field.label} onChange={(e) => updateField(index, { label: e.target.value })} className="w-full px-2 py-1 text-sm border border-gray-300 rounded" />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">
-                        Type
-                      </label>
-                      <select
-                        value={field.type}
-                        onChange={(e) => updateField(index, { type: e.target.value as FormField["type"] })}
-                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
-                      >
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Type</label>
+                      <select value={field.type} onChange={(e) => updateField(index, { type: e.target.value as FormField["type"] })} className="w-full px-2 py-1 text-sm border border-gray-300 rounded">
                         <option value="text">Text</option>
                         <option value="email">Email</option>
                         <option value="phone">Phone</option>
@@ -1278,12 +1479,7 @@ function FormEditorModal({
                     </div>
                     <div className="flex items-center">
                       <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={field.required}
-                          onChange={(e) => updateField(index, { required: e.target.checked })}
-                          className="w-4 h-4 text-blue-600 border-gray-300 rounded"
-                        />
+                        <input type="checkbox" checked={field.required} onChange={(e) => updateField(index, { required: e.target.checked })} className="w-4 h-4 text-blue-600 border-gray-300 rounded" />
                         <span className="text-sm text-gray-700">Required</span>
                       </label>
                     </div>
@@ -1291,27 +1487,13 @@ function FormEditorModal({
 
                   <div className="grid grid-cols-2 gap-3 mt-3">
                     <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">
-                        Placeholder
-                      </label>
-                      <input
-                        type="text"
-                        value={field.placeholder || ""}
-                        onChange={(e) => updateField(index, { placeholder: e.target.value })}
-                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
-                      />
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Placeholder</label>
+                      <input type="text" value={field.placeholder || ""} onChange={(e) => updateField(index, { placeholder: e.target.value })} className="w-full px-2 py-1 text-sm border border-gray-300 rounded" />
                     </div>
                     {field.type === "select" && (
                       <div>
-                        <label className="block text-xs font-medium text-gray-600 mb-1">
-                          Options (comma-separated)
-                        </label>
-                        <input
-                          type="text"
-                          value={field.options?.join(", ") || ""}
-                          onChange={(e) => updateField(index, { options: e.target.value.split(",").map(s => s.trim()).filter(Boolean) })}
-                          className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
-                        />
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Options (comma-separated)</label>
+                        <input type="text" value={field.options?.join(", ") || ""} onChange={(e) => updateField(index, { options: e.target.value.split(",").map(s => s.trim()).filter(Boolean) })} className="w-full px-2 py-1 text-sm border border-gray-300 rounded" />
                       </div>
                     )}
                   </div>
@@ -1320,19 +1502,9 @@ function FormEditorModal({
             </div>
           </div>
 
-          {/* Actions */}
           <div className="flex gap-4 pt-4 border-t border-gray-200">
-            <button
-              onClick={onClose}
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg font-medium hover:bg-gray-50"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={() => onSave(editedConfig)}
-              disabled={isSaving}
-              className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50"
-            >
+            <button onClick={onClose} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg font-medium hover:bg-gray-50">Cancel</button>
+            <button onClick={() => onSave(editedConfig)} disabled={isSaving} className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50">
               {isSaving ? "Saving..." : "Save Changes"}
             </button>
           </div>
