@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { title, date, time, location, description, category, image_url, registration_url } = body;
+    const { title, date, time, location, description, category, image_url, registration_url, registration_type, registration_fields, max_registrations } = body;
 
     if (!title || !date || !time || !location || !description || !category) {
       return NextResponse.json(
@@ -44,6 +44,9 @@ export async function POST(request: NextRequest) {
       category,
       image_url,
       registration_url,
+      registration_type: registration_type || "none",
+      registration_fields: registration_fields || [],
+      max_registrations,
     });
 
     return NextResponse.json(event, { status: 201 });
