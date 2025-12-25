@@ -18,6 +18,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(submissions);
   } catch (error) {
     console.error("Error fetching form submissions:", error);
+    // Return empty array if table doesn't exist yet
+    const errorMessage = error instanceof Error ? error.message : "";
+    if (errorMessage.includes("does not exist") || errorMessage.includes("relation")) {
+      return NextResponse.json([]);
+    }
     return NextResponse.json(
       { error: "Failed to fetch form submissions" },
       { status: 500 }

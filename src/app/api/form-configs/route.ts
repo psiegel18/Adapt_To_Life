@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
       const config = await getFormConfig(formType);
       if (!config) {
         return NextResponse.json(
-          { error: "Form configuration not found" },
+          { error: "Form configuration not found. Please initialize the database first." },
           { status: 404 }
         );
       }
@@ -31,6 +31,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(configs);
   } catch (error) {
     console.error("Error fetching form configs:", error);
+    // Return empty array if table doesn't exist yet
+    const errorMessage = error instanceof Error ? error.message : "";
+    if (errorMessage.includes("does not exist") || errorMessage.includes("relation")) {
+      return NextResponse.json([]);
+    }
     return NextResponse.json(
       { error: "Failed to fetch form configurations" },
       { status: 500 }
