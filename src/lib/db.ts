@@ -82,6 +82,9 @@ export async function initializeDatabase() {
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `;
+
+  // Initialize form tables
+  await initializeFormTables();
 }
 
 // Event types
@@ -315,6 +318,251 @@ export async function deleteReferral(id: number): Promise<boolean> {
   const sql = getDb();
   const result = await sql`
     DELETE FROM referrals WHERE id = ${id}
+    RETURNING id
+  `;
+  return result.length > 0;
+}
+
+// Form field configuration
+export interface FormField {
+  id: string;
+  type: "text" | "email" | "phone" | "textarea" | "select" | "checkbox";
+  label: string;
+  placeholder?: string;
+  required: boolean;
+  options?: string[]; // For select fields
+  helpText?: string;
+}
+
+// Form configuration
+export interface FormConfig {
+  id: number;
+  form_type: string;
+  title: string;
+  description: string;
+  fields: FormField[];
+  submit_button_text: string;
+  success_message: string;
+  enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+// Form submission
+export interface FormSubmission {
+  id: number;
+  form_type: string;
+  data: Record<string, unknown>;
+  status: "new" | "read" | "replied" | "archived";
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// Initialize form tables
+export async function initializeFormTables() {
+  const sql = getDb();
+
+  // Create form_configs table
+  await sql`
+    CREATE TABLE IF NOT EXISTS form_configs (
+      id SERIAL PRIMARY KEY,
+      form_type VARCHAR(100) UNIQUE NOT NULL,
+      title VARCHAR(255) NOT NULL,
+      description TEXT,
+      fields JSONB NOT NULL DEFAULT '[]',
+      submit_button_text VARCHAR(100) DEFAULT 'Submit',
+      success_message TEXT DEFAULT 'Thank you for your submission!',
+      enabled BOOLEAN DEFAULT true,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `;
+
+  // Create form_submissions table
+  await sql`
+    CREATE TABLE IF NOT EXISTS form_submissions (
+      id SERIAL PRIMARY KEY,
+      form_type VARCHAR(100) NOT NULL,
+      data JSONB NOT NULL,
+      status VARCHAR(50) DEFAULT 'new',
+      notes TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `;
+
+  // Insert default form configurations
+  const defaultForms = [
+    {
+      form_type: "contact",
+      title: "Get in Touch",
+      description: "Have a question or want to learn more? Send us a message and we'll get back to you soon.",
+      fields: [
+        { id: "name", type: "text", label: "Full Name", placeholder: "Your name", required: true },
+        { id: "email", type: "email", label: "Email Address", placeholder: "your@email.com", required: true },
+        { id: "phone", type: "phone", label: "Phone Number", placeholder: "(555) 123-4567", required: false },
+        { id: "subject", type: "text", label: "Subject", placeholder: "What is this regarding?", required: true },
+        { id: "message", type: "textarea", label: "Message", placeholder: "Tell us how we can help...", required: true }
+      ],
+      submit_button_text: "Send Message",
+      success_message: "Thank you for reaching out! We'll get back to you within 2 business days."
+    },
+    {
+      form_type: "volunteer",
+      title: "Volunteer With Us",
+      description: "Help at events, contribute expertise, or assist with outreach. We'd love to have you on our team!",
+      fields: [
+        { id: "name", type: "text", label: "Full Name", placeholder: "Your name", required: true },
+        { id: "email", type: "email", label: "Email Address", placeholder: "your@email.com", required: true },
+        { id: "phone", type: "phone", label: "Phone Number", placeholder: "(555) 123-4567", required: true },
+        { id: "interests", type: "select", label: "Area of Interest", required: true, options: ["Event Support", "Administrative", "Outreach & Marketing", "Coaching/Training", "Other"] },
+        { id: "experience", type: "textarea", label: "Relevant Experience", placeholder: "Tell us about your background and skills...", required: false },
+        { id: "availability", type: "text", label: "Availability", placeholder: "e.g., Weekends, Evenings, Flexible", required: true },
+        { id: "message", type: "textarea", label: "Why do you want to volunteer?", placeholder: "Share your motivation...", required: true }
+      ],
+      submit_button_text: "Submit Application",
+      success_message: "Thank you for your interest in volunteering! We'll review your application and reach out soon."
+    },
+    {
+      form_type: "corporate_sponsorship",
+      title: "Corporate Sponsorship",
+      description: "Partner with us to make a bigger impact in the community. Let's discuss how we can work together.",
+      fields: [
+        { id: "contact_name", type: "text", label: "Contact Name", placeholder: "Your name", required: true },
+        { id: "company", type: "text", label: "Company Name", placeholder: "Your company", required: true },
+        { id: "title", type: "text", label: "Job Title", placeholder: "Your position", required: true },
+        { id: "email", type: "email", label: "Email Address", placeholder: "your@company.com", required: true },
+        { id: "phone", type: "phone", label: "Phone Number", placeholder: "(555) 123-4567", required: true },
+        { id: "sponsorship_level", type: "select", label: "Sponsorship Interest", required: true, options: ["Event Sponsor", "Program Sponsor", "Annual Partner", "In-Kind Donation", "Not Sure - Let's Discuss"] },
+        { id: "message", type: "textarea", label: "Tell us about your interest", placeholder: "Share your goals and how you'd like to partner...", required: true }
+      ],
+      submit_button_text: "Submit Inquiry",
+      success_message: "Thank you for your interest in partnering with us! Our team will reach out within 2 business days to discuss opportunities."
+    },
+    {
+      form_type: "equipment_donation",
+      title: "Equipment Donation",
+      description: "Donate sport wheelchairs or other adaptive equipment to help athletes in need.",
+      fields: [
+        { id: "name", type: "text", label: "Full Name", placeholder: "Your name", required: true },
+        { id: "email", type: "email", label: "Email Address", placeholder: "your@email.com", required: true },
+        { id: "phone", type: "phone", label: "Phone Number", placeholder: "(555) 123-4567", required: true },
+        { id: "equipment_type", type: "text", label: "Equipment Type", placeholder: "e.g., Sport Wheelchair, Hand Cycle", required: true },
+        { id: "condition", type: "select", label: "Condition", required: true, options: ["New", "Like New", "Good", "Fair", "Needs Repair"] },
+        { id: "description", type: "textarea", label: "Equipment Description", placeholder: "Provide details about the equipment (brand, size, age, any issues)...", required: true },
+        { id: "location", type: "text", label: "Pickup Location (City, State)", placeholder: "Where is the equipment located?", required: true }
+      ],
+      submit_button_text: "Submit Donation",
+      success_message: "Thank you for your generous equipment donation! We'll review and contact you to arrange pickup or drop-off details."
+    }
+  ];
+
+  for (const form of defaultForms) {
+    await sql`
+      INSERT INTO form_configs (form_type, title, description, fields, submit_button_text, success_message)
+      VALUES (${form.form_type}, ${form.title}, ${form.description}, ${JSON.stringify(form.fields)}, ${form.submit_button_text}, ${form.success_message})
+      ON CONFLICT (form_type) DO NOTHING
+    `;
+  }
+}
+
+// Get all form configurations
+export async function getFormConfigs(): Promise<FormConfig[]> {
+  const sql = getDb();
+  const configs = await sql`
+    SELECT * FROM form_configs
+    ORDER BY form_type ASC
+  `;
+  return configs as FormConfig[];
+}
+
+// Get a single form configuration
+export async function getFormConfig(formType: string): Promise<FormConfig | null> {
+  const sql = getDb();
+  const result = await sql`
+    SELECT * FROM form_configs WHERE form_type = ${formType}
+  `;
+  return (result[0] as FormConfig) || null;
+}
+
+// Update form configuration
+export async function updateFormConfig(
+  formType: string,
+  updates: Partial<Omit<FormConfig, "id" | "form_type" | "created_at" | "updated_at">>
+): Promise<FormConfig | null> {
+  const sql = getDb();
+  const result = await sql`
+    UPDATE form_configs
+    SET
+      title = COALESCE(${updates.title || null}, title),
+      description = COALESCE(${updates.description || null}, description),
+      fields = COALESCE(${updates.fields ? JSON.stringify(updates.fields) : null}, fields),
+      submit_button_text = COALESCE(${updates.submit_button_text || null}, submit_button_text),
+      success_message = COALESCE(${updates.success_message || null}, success_message),
+      enabled = COALESCE(${updates.enabled !== undefined ? updates.enabled : null}, enabled),
+      updated_at = CURRENT_TIMESTAMP
+    WHERE form_type = ${formType}
+    RETURNING *
+  `;
+  return (result[0] as FormConfig) || null;
+}
+
+// Get all form submissions
+export async function getFormSubmissions(formType?: string): Promise<FormSubmission[]> {
+  const sql = getDb();
+  if (formType) {
+    const submissions = await sql`
+      SELECT * FROM form_submissions
+      WHERE form_type = ${formType}
+      ORDER BY created_at DESC
+    `;
+    return submissions as FormSubmission[];
+  }
+  const submissions = await sql`
+    SELECT * FROM form_submissions
+    ORDER BY created_at DESC
+  `;
+  return submissions as FormSubmission[];
+}
+
+// Create a form submission
+export async function createFormSubmission(
+  formType: string,
+  data: Record<string, unknown>
+): Promise<FormSubmission> {
+  const sql = getDb();
+  const result = await sql`
+    INSERT INTO form_submissions (form_type, data)
+    VALUES (${formType}, ${JSON.stringify(data)})
+    RETURNING *
+  `;
+  return result[0] as FormSubmission;
+}
+
+// Update form submission status
+export async function updateFormSubmission(
+  id: number,
+  updates: { status?: string; notes?: string }
+): Promise<FormSubmission | null> {
+  const sql = getDb();
+  const result = await sql`
+    UPDATE form_submissions
+    SET
+      status = COALESCE(${updates.status || null}, status),
+      notes = COALESCE(${updates.notes || null}, notes),
+      updated_at = CURRENT_TIMESTAMP
+    WHERE id = ${id}
+    RETURNING *
+  `;
+  return (result[0] as FormSubmission) || null;
+}
+
+// Delete form submission
+export async function deleteFormSubmission(id: number): Promise<boolean> {
+  const sql = getDb();
+  const result = await sql`
+    DELETE FROM form_submissions WHERE id = ${id}
     RETURNING id
   `;
   return result.length > 0;

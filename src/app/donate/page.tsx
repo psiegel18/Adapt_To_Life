@@ -1,5 +1,6 @@
 import { Metadata } from "next";
 import { getSetting } from "@/lib/db";
+import OtherWaysToSupport from "./OtherWaysToSupport";
 
 export const metadata: Metadata = {
   title: "Donate | AdaptToLife",
@@ -127,55 +128,7 @@ export default async function DonatePage() {
       </section>
 
       {/* Other Ways to Help */}
-      <section className="py-16 md:py-24 bg-white border-t border-[#E5E5E5]">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h2 className="text-3xl md:text-4xl font-bold text-black mb-12">
-            Other Ways to Support
-          </h2>
-          <div className="grid md:grid-cols-3 gap-8">
-            <div>
-              <h3 className="font-bold text-black mb-2">Volunteer</h3>
-              <p className="text-black text-sm mb-4">
-                Help at events, contribute expertise, or assist with outreach.
-              </p>
-              <a
-                href="mailto:volunteer@adapttolife.org"
-                className="text-black font-medium hover:text-[#FF6B35] underline underline-offset-4"
-              >
-                Get Involved →
-              </a>
-            </div>
-            <div>
-              <h3 className="font-bold text-black mb-2">
-                Corporate Sponsorship
-              </h3>
-              <p className="text-black text-sm mb-4">
-                Partner with us to make a bigger impact in the community.
-              </p>
-              <a
-                href="mailto:partnerships@adapttolife.org"
-                className="text-black font-medium hover:text-[#FF6B35] underline underline-offset-4"
-              >
-                Partner With Us →
-              </a>
-            </div>
-            <div>
-              <h3 className="font-bold text-black mb-2">
-                Equipment Donation
-              </h3>
-              <p className="text-black text-sm mb-4">
-                Donate sport wheelchairs or other adaptive equipment.
-              </p>
-              <a
-                href="mailto:equipment@adapttolife.org"
-                className="text-black font-medium hover:text-[#FF6B35] underline underline-offset-4"
-              >
-                Learn More →
-              </a>
-            </div>
-          </div>
-        </div>
-      </section>
+      <OtherWaysToSupport />
 
       {/* Final CTA */}
       <section className="py-16 md:py-24 bg-black">
