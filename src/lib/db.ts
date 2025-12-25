@@ -25,6 +25,38 @@ export async function initializeDatabase() {
       category VARCHAR(50) NOT NULL,
       image_url VARCHAR(500),
       registration_url VARCHAR(500),
+      registration_type VARCHAR(20) DEFAULT 'none',
+      registration_fields JSONB DEFAULT '[]',
+      max_registrations INTEGER,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `;
+
+  // Add new columns to existing events table if they don't exist
+  await sql`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'events' AND column_name = 'registration_type') THEN
+        ALTER TABLE events ADD COLUMN registration_type VARCHAR(20) DEFAULT 'none';
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'events' AND column_name = 'registration_fields') THEN
+        ALTER TABLE events ADD COLUMN registration_fields JSONB DEFAULT '[]';
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'events' AND column_name = 'max_registrations') THEN
+        ALTER TABLE events ADD COLUMN max_registrations INTEGER;
+      END IF;
+    END $$;
+  `;
+
+  // Create event_registrations table
+  await sql`
+    CREATE TABLE IF NOT EXISTS event_registrations (
+      id SERIAL PRIMARY KEY,
+      event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+      data JSONB NOT NULL,
+      status VARCHAR(50) DEFAULT 'confirmed',
+      notes TEXT,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
@@ -98,6 +130,20 @@ export interface DbEvent {
   category: "basketball" | "swimming" | "fitness" | "social" | "other";
   image_url?: string;
   registration_url?: string;
+  registration_type: "none" | "external" | "internal";
+  registration_fields?: FormField[];
+  max_registrations?: number;
+  created_at: string;
+  updated_at: string;
+}
+
+// Event registration types
+export interface EventRegistration {
+  id: number;
+  event_id: number;
+  data: Record<string, unknown>;
+  status: "confirmed" | "waitlisted" | "cancelled";
+  notes?: string;
   created_at: string;
   updated_at: string;
 }
@@ -127,8 +173,8 @@ export async function createEvent(
 ): Promise<DbEvent> {
   const sql = getDb();
   const result = await sql`
-    INSERT INTO events (title, date, time, location, description, category, image_url, registration_url)
-    VALUES (${event.title}, ${event.date}, ${event.time}, ${event.location}, ${event.description}, ${event.category}, ${event.image_url || null}, ${event.registration_url || null})
+    INSERT INTO events (title, date, time, location, description, category, image_url, registration_url, registration_type, registration_fields, max_registrations)
+    VALUES (${event.title}, ${event.date}, ${event.time}, ${event.location}, ${event.description}, ${event.category}, ${event.image_url || null}, ${event.registration_url || null}, ${event.registration_type || "none"}, ${event.registration_fields ? JSON.stringify(event.registration_fields) : "[]"}, ${event.max_registrations || null})
     RETURNING *
   `;
   return result[0] as DbEvent;
@@ -151,6 +197,9 @@ export async function updateEvent(
       category = COALESCE(${event.category || null}, category),
       image_url = COALESCE(${event.image_url || null}, image_url),
       registration_url = COALESCE(${event.registration_url || null}, registration_url),
+      registration_type = COALESCE(${event.registration_type || null}, registration_type),
+      registration_fields = COALESCE(${event.registration_fields ? JSON.stringify(event.registration_fields) : null}, registration_fields),
+      max_registrations = COALESCE(${event.max_registrations !== undefined ? event.max_registrations : null}, max_registrations),
       updated_at = CURRENT_TIMESTAMP
     WHERE id = ${id}
     RETURNING *
@@ -163,6 +212,81 @@ export async function deleteEvent(id: number): Promise<boolean> {
   const sql = getDb();
   const result = await sql`
     DELETE FROM events WHERE id = ${id}
+    RETURNING id
+  `;
+  return result.length > 0;
+}
+
+// Get event registrations
+export async function getEventRegistrations(eventId: number): Promise<EventRegistration[]> {
+  const sql = getDb();
+  const registrations = await sql`
+    SELECT * FROM event_registrations
+    WHERE event_id = ${eventId}
+    ORDER BY created_at DESC
+  `;
+  return registrations as EventRegistration[];
+}
+
+// Get all registrations (for admin)
+export async function getAllEventRegistrations(): Promise<(EventRegistration & { event_title: string; event_date: string })[]> {
+  const sql = getDb();
+  const registrations = await sql`
+    SELECT er.*, e.title as event_title, e.date as event_date
+    FROM event_registrations er
+    JOIN events e ON er.event_id = e.id
+    ORDER BY er.created_at DESC
+  `;
+  return registrations as (EventRegistration & { event_title: string; event_date: string })[];
+}
+
+// Get registration count for an event
+export async function getEventRegistrationCount(eventId: number): Promise<number> {
+  const sql = getDb();
+  const result = await sql`
+    SELECT COUNT(*) as count FROM event_registrations
+    WHERE event_id = ${eventId} AND status != 'cancelled'
+  `;
+  return parseInt(result[0]?.count || "0", 10);
+}
+
+// Create event registration
+export async function createEventRegistration(
+  eventId: number,
+  data: Record<string, unknown>
+): Promise<EventRegistration> {
+  const sql = getDb();
+  const result = await sql`
+    INSERT INTO event_registrations (event_id, data)
+    VALUES (${eventId}, ${JSON.stringify(data)})
+    RETURNING *
+  `;
+  return result[0] as EventRegistration;
+}
+
+// Update event registration
+export async function updateEventRegistration(
+  id: number,
+  updates: { status?: string; notes?: string }
+): Promise<EventRegistration | null> {
+  const sql = getDb();
+  const result = await sql`
+    UPDATE event_registrations
+    SET
+      status = COALESCE(${updates.status || null}, status),
+      notes = COALESCE(${updates.notes || null}, notes),
+      updated_at = CURRENT_TIMESTAMP
+    WHERE id = ${id}
+    RETURNING *
+  `;
+  return (result[0] as EventRegistration) || null;
+}
+
+// Delete event registration
+export async function deleteEventRegistration(id: number): Promise<boolean> {
+  const sql = getDb();
+  const result = await sql`
+    DELETE FROM event_registrations WHERE id = ${id}
     RETURNING id
   `;
   return result.length > 0;

@@ -16,6 +16,9 @@ const emptyEvent: EventFormData = {
   category: "basketball",
   image_url: "",
   registration_url: "",
+  registration_type: "none",
+  registration_fields: [],
+  max_registrations: undefined,
 };
 
 type MainTab = "submissions" | "events" | "settings";
@@ -371,6 +374,9 @@ export default function AdminPage() {
       category: event.category,
       image_url: event.image_url || "",
       registration_url: event.registration_url || "",
+      registration_type: event.registration_type || "none",
+      registration_fields: event.registration_fields || [],
+      max_registrations: event.max_registrations,
     });
     setShowEventForm(true);
   };
@@ -1157,14 +1163,121 @@ export default function AdminPage() {
                         />
                       </div>
 
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Registration URL (optional)</label>
-                        <input
-                          type="url"
-                          value={eventForm.registration_url}
-                          onChange={(e) => setEventForm({ ...eventForm, registration_url: e.target.value })}
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                        />
+                      {/* Registration Settings */}
+                      <div className="border-t pt-4 mt-4">
+                        <h4 className="font-medium text-gray-900 mb-3">Registration Settings</h4>
+
+                        <div className="mb-4">
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Registration Type</label>
+                          <select
+                            value={eventForm.registration_type}
+                            onChange={(e) => setEventForm({ ...eventForm, registration_type: e.target.value as "none" | "external" | "internal" })}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                          >
+                            <option value="none">No Registration</option>
+                            <option value="external">External Link</option>
+                            <option value="internal">Internal Form (Saved to Database)</option>
+                          </select>
+                        </div>
+
+                        {eventForm.registration_type === "external" && (
+                          <div className="mb-4">
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Registration URL</label>
+                            <input
+                              type="url"
+                              value={eventForm.registration_url}
+                              onChange={(e) => setEventForm({ ...eventForm, registration_url: e.target.value })}
+                              placeholder="https://example.com/register"
+                              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                            />
+                          </div>
+                        )}
+
+                        {eventForm.registration_type === "internal" && (
+                          <div className="space-y-4 bg-gray-50 p-4 rounded-lg">
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Max Registrations (optional)</label>
+                              <input
+                                type="number"
+                                min="0"
+                                value={eventForm.max_registrations || ""}
+                                onChange={(e) => setEventForm({ ...eventForm, max_registrations: e.target.value ? parseInt(e.target.value, 10) : undefined })}
+                                placeholder="Leave empty for unlimited"
+                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">Registration Form Fields</label>
+                              <p className="text-xs text-gray-500 mb-2">
+                                Default fields: Name, Email, Phone. Add custom fields below.
+                              </p>
+
+                              {(eventForm.registration_fields || []).map((field, index) => (
+                                <div key={index} className="flex gap-2 mb-2 items-center bg-white p-2 rounded border">
+                                  <input
+                                    type="text"
+                                    value={field.label}
+                                    onChange={(e) => {
+                                      const newFields = [...(eventForm.registration_fields || [])];
+                                      newFields[index] = { ...field, label: e.target.value, id: e.target.value.toLowerCase().replace(/\s+/g, "_") };
+                                      setEventForm({ ...eventForm, registration_fields: newFields });
+                                    }}
+                                    placeholder="Field Label"
+                                    className="flex-1 px-3 py-1.5 border border-gray-300 rounded text-sm"
+                                  />
+                                  <select
+                                    value={field.type}
+                                    onChange={(e) => {
+                                      const newFields = [...(eventForm.registration_fields || [])];
+                                      newFields[index] = { ...field, type: e.target.value as FormField["type"] };
+                                      setEventForm({ ...eventForm, registration_fields: newFields });
+                                    }}
+                                    className="px-3 py-1.5 border border-gray-300 rounded text-sm"
+                                  >
+                                    <option value="text">Text</option>
+                                    <option value="textarea">Text Area</option>
+                                    <option value="select">Dropdown</option>
+                                    <option value="checkbox">Checkbox</option>
+                                  </select>
+                                  <label className="flex items-center gap-1 text-sm">
+                                    <input
+                                      type="checkbox"
+                                      checked={field.required}
+                                      onChange={(e) => {
+                                        const newFields = [...(eventForm.registration_fields || [])];
+                                        newFields[index] = { ...field, required: e.target.checked };
+                                        setEventForm({ ...eventForm, registration_fields: newFields });
+                                      }}
+                                    />
+                                    Required
+                                  </label>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const newFields = (eventForm.registration_fields || []).filter((_, i) => i !== index);
+                                      setEventForm({ ...eventForm, registration_fields: newFields });
+                                    }}
+                                    className="text-red-600 hover:text-red-700 px-2"
+                                  >
+                                    ×
+                                  </button>
+                                </div>
+                              ))}
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const newField: FormField = { id: "", type: "text", label: "", required: false };
+                                  setEventForm({ ...eventForm, registration_fields: [...(eventForm.registration_fields || []), newField] });
+                                }}
+                                className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                              >
+                                + Add Custom Field
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </div>
 
                       <div className="flex gap-4 pt-4">
@@ -1200,9 +1313,18 @@ export default function AdminPage() {
                       <div className="flex items-center gap-2 mb-1">
                         <h3 className="font-semibold text-gray-900">{event.title}</h3>
                         <span className="text-xs px-2 py-1 bg-gray-100 rounded-full text-gray-600">{event.category}</span>
+                        {event.registration_type === "internal" && (
+                          <span className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded-full">Internal Registration</span>
+                        )}
+                        {event.registration_type === "external" && (
+                          <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded-full">External Link</span>
+                        )}
                       </div>
                       <p className="text-sm text-gray-600">{event.date} | {event.time}</p>
                       <p className="text-sm text-gray-500">{event.location}</p>
+                      {event.registration_type === "internal" && event.max_registrations && (
+                        <p className="text-xs text-gray-500 mt-1">Max capacity: {event.max_registrations}</p>
+                      )}
                     </div>
                     <div className="flex gap-2">
                       <button onClick={() => editEvent(event)} className="text-blue-600 hover:text-blue-700 font-medium text-sm">Edit</button>
