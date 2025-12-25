@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import EventRegistrationModal from "@/components/EventRegistrationModal";
 import { formatDate, getCategoryColor, getCategoryLabel } from "@/data/events";
+import { FormField } from "@/lib/db";
 
 interface EventCardProps {
   event: {
@@ -16,15 +17,7 @@ interface EventCardProps {
     imageUrl?: string;
     registrationUrl?: string;
     registrationType?: "none" | "external" | "internal";
-    registrationFields?: Array<{
-      id: string;
-      type: "text" | "email" | "phone" | "textarea" | "select" | "checkbox";
-      label: string;
-      placeholder?: string;
-      required: boolean;
-      options?: string[];
-      helpText?: string;
-    }>;
+    registrationFields?: FormField[];
     maxRegistrations?: number;
   };
 }

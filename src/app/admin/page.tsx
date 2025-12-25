@@ -3,7 +3,7 @@
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { DbEvent, GrantApplication, Referral, FormSubmission, FormConfig, FormField } from "@/lib/db";
+import { DbEvent, GrantApplication, Referral, FormSubmission, FormConfig, FormField, EventRegistration } from "@/lib/db";
 
 type EventFormData = Omit<DbEvent, "id" | "created_at" | "updated_at">;
 
@@ -63,6 +63,11 @@ export default function AdminPage() {
 
   // Notes editing state
   const [editingNotes, setEditingNotes] = useState<{ id: number; notes: string; type: "submission" | "application" | "referral" } | null>(null);
+
+  // Event roster state
+  const [viewingRosterEvent, setViewingRosterEvent] = useState<DbEvent | null>(null);
+  const [eventRegistrations, setEventRegistrations] = useState<EventRegistration[]>([]);
+  const [isLoadingRoster, setIsLoadingRoster] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
@@ -1214,54 +1219,109 @@ export default function AdminPage() {
                               </p>
 
                               {(eventForm.registration_fields || []).map((field, index) => (
-                                <div key={index} className="flex gap-2 mb-2 items-center bg-white p-2 rounded border">
-                                  <input
-                                    type="text"
-                                    value={field.label}
-                                    onChange={(e) => {
-                                      const newFields = [...(eventForm.registration_fields || [])];
-                                      newFields[index] = { ...field, label: e.target.value, id: e.target.value.toLowerCase().replace(/\s+/g, "_") };
-                                      setEventForm({ ...eventForm, registration_fields: newFields });
-                                    }}
-                                    placeholder="Field Label"
-                                    className="flex-1 px-3 py-1.5 border border-gray-300 rounded text-sm"
-                                  />
-                                  <select
-                                    value={field.type}
-                                    onChange={(e) => {
-                                      const newFields = [...(eventForm.registration_fields || [])];
-                                      newFields[index] = { ...field, type: e.target.value as FormField["type"] };
-                                      setEventForm({ ...eventForm, registration_fields: newFields });
-                                    }}
-                                    className="px-3 py-1.5 border border-gray-300 rounded text-sm"
-                                  >
-                                    <option value="text">Text</option>
-                                    <option value="textarea">Text Area</option>
-                                    <option value="select">Dropdown</option>
-                                    <option value="checkbox">Checkbox</option>
-                                  </select>
-                                  <label className="flex items-center gap-1 text-sm">
+                                <div key={index} className="mb-3 bg-white p-3 rounded border">
+                                  <div className="flex gap-2 items-center mb-2">
                                     <input
-                                      type="checkbox"
-                                      checked={field.required}
+                                      type="text"
+                                      value={field.label}
                                       onChange={(e) => {
                                         const newFields = [...(eventForm.registration_fields || [])];
-                                        newFields[index] = { ...field, required: e.target.checked };
+                                        newFields[index] = { ...field, label: e.target.value, id: e.target.value.toLowerCase().replace(/\s+/g, "_") };
                                         setEventForm({ ...eventForm, registration_fields: newFields });
                                       }}
+                                      placeholder="Field Label"
+                                      className="flex-1 px-3 py-1.5 border border-gray-300 rounded text-sm"
                                     />
-                                    Required
-                                  </label>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      const newFields = (eventForm.registration_fields || []).filter((_, i) => i !== index);
-                                      setEventForm({ ...eventForm, registration_fields: newFields });
-                                    }}
-                                    className="text-red-600 hover:text-red-700 px-2"
-                                  >
-                                    ×
-                                  </button>
+                                    <select
+                                      value={field.type}
+                                      onChange={(e) => {
+                                        const newFields = [...(eventForm.registration_fields || [])];
+                                        const newType = e.target.value as FormField["type"];
+                                        newFields[index] = {
+                                          ...field,
+                                          type: newType,
+                                          options: ["select", "multiselect", "checkbox"].includes(newType) ? (field.options || []) : undefined
+                                        };
+                                        setEventForm({ ...eventForm, registration_fields: newFields });
+                                      }}
+                                      className="px-3 py-1.5 border border-gray-300 rounded text-sm"
+                                    >
+                                      <option value="text">Text</option>
+                                      <option value="email">Email</option>
+                                      <option value="phone">Phone</option>
+                                      <option value="number">Number</option>
+                                      <option value="date">Date</option>
+                                      <option value="textarea">Text Area</option>
+                                      <option value="select">Dropdown (Single)</option>
+                                      <option value="multiselect">Dropdown (Multi-select)</option>
+                                      <option value="checkbox">Checkbox</option>
+                                    </select>
+                                    <label className="flex items-center gap-1 text-sm whitespace-nowrap">
+                                      <input
+                                        type="checkbox"
+                                        checked={field.required}
+                                        onChange={(e) => {
+                                          const newFields = [...(eventForm.registration_fields || [])];
+                                          newFields[index] = { ...field, required: e.target.checked };
+                                          setEventForm({ ...eventForm, registration_fields: newFields });
+                                        }}
+                                      />
+                                      Required
+                                    </label>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const newFields = (eventForm.registration_fields || []).filter((_, i) => i !== index);
+                                        setEventForm({ ...eventForm, registration_fields: newFields });
+                                      }}
+                                      className="text-red-600 hover:text-red-700 px-2 text-lg"
+                                    >
+                                      ×
+                                    </button>
+                                  </div>
+
+                                  {/* Options editor for select/multiselect/checkbox */}
+                                  {["select", "multiselect", "checkbox"].includes(field.type) && (
+                                    <div className="mt-2 pl-2 border-l-2 border-blue-200">
+                                      <label className="block text-xs font-medium text-gray-600 mb-1">
+                                        Options (one per line)
+                                      </label>
+                                      <textarea
+                                        value={(field.options || []).join("\n")}
+                                        onChange={(e) => {
+                                          const newFields = [...(eventForm.registration_fields || [])];
+                                          const options = e.target.value.split("\n").filter(opt => opt.trim() !== "" || e.target.value.endsWith("\n"));
+                                          newFields[index] = { ...field, options };
+                                          setEventForm({ ...eventForm, registration_fields: newFields });
+                                        }}
+                                        placeholder="Option 1&#10;Option 2&#10;Option 3"
+                                        rows={3}
+                                        className="w-full px-3 py-1.5 border border-gray-300 rounded text-sm"
+                                      />
+                                      <p className="text-xs text-gray-500 mt-1">
+                                        {field.type === "checkbox" ? "User can select multiple options" :
+                                         field.type === "multiselect" ? "User can select multiple options from dropdown" :
+                                         "User selects one option from dropdown"}
+                                      </p>
+                                    </div>
+                                  )}
+
+                                  {/* Placeholder for text fields */}
+                                  {["text", "email", "phone", "number", "textarea"].includes(field.type) && (
+                                    <div className="mt-2">
+                                      <input
+                                        type="text"
+                                        value={field.placeholder || ""}
+                                        onChange={(e) => {
+                                          const newFields = [...(eventForm.registration_fields || [])];
+                                          newFields[index] = { ...field, placeholder: e.target.value };
+                                          setEventForm({ ...eventForm, registration_fields: newFields });
+                                        }}
+                                        placeholder="Placeholder text (optional)"
+                                        className="w-full px-3 py-1.5 border border-gray-300 rounded text-sm"
+                                      />
+                                    </div>
+                                  )}
                                 </div>
                               ))}
 
@@ -1327,6 +1387,28 @@ export default function AdminPage() {
                       )}
                     </div>
                     <div className="flex gap-2">
+                      {event.registration_type === "internal" && (
+                        <button
+                          onClick={async () => {
+                            setViewingRosterEvent(event);
+                            setIsLoadingRoster(true);
+                            try {
+                              const res = await fetch(`/api/event-registrations?event_id=${event.id}`);
+                              if (res.ok) {
+                                const data = await res.json();
+                                setEventRegistrations(data);
+                              }
+                            } catch (error) {
+                              console.error("Error fetching registrations:", error);
+                            } finally {
+                              setIsLoadingRoster(false);
+                            }
+                          }}
+                          className="text-green-600 hover:text-green-700 font-medium text-sm"
+                        >
+                          View Roster
+                        </button>
+                      )}
                       <button onClick={() => editEvent(event)} className="text-blue-600 hover:text-blue-700 font-medium text-sm">Edit</button>
                       <button onClick={() => deleteEvent(event.id)} className="text-red-600 hover:text-red-700 font-medium text-sm">Delete</button>
                     </div>
@@ -1443,6 +1525,188 @@ export default function AdminPage() {
             onClose={() => { setShowFormEditor(false); setEditingFormConfig(null); }}
             isSaving={isSaving}
           />
+        )}
+
+        {/* Event Roster Modal */}
+        {viewingRosterEvent && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
+                <div>
+                  <h3 className="text-xl font-semibold text-gray-900">Event Roster</h3>
+                  <p className="text-sm text-gray-600">{viewingRosterEvent.title} - {viewingRosterEvent.date}</p>
+                </div>
+                <button
+                  onClick={() => { setViewingRosterEvent(null); setEventRegistrations([]); }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="p-6">
+                {isLoadingRoster ? (
+                  <div className="text-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                    <p className="mt-2 text-gray-600">Loading registrations...</p>
+                  </div>
+                ) : eventRegistrations.length === 0 ? (
+                  <div className="text-center py-8">
+                    <p className="text-gray-500">No registrations yet for this event.</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex justify-between items-center mb-4">
+                      <p className="text-sm text-gray-600">
+                        {eventRegistrations.length} registration{eventRegistrations.length !== 1 ? "s" : ""}
+                        {viewingRosterEvent.max_registrations && ` / ${viewingRosterEvent.max_registrations} max`}
+                      </p>
+                      <button
+                        onClick={() => {
+                          const headers = ["Name", "Email", "Phone", "Status", "Registered At"];
+                          const rows = eventRegistrations.map(r => {
+                            const data = r.data as Record<string, string>;
+                            return [
+                              data.name || "",
+                              data.email || "",
+                              data.phone || "",
+                              r.status,
+                              new Date(r.created_at).toLocaleString()
+                            ];
+                          });
+                          const csv = [headers, ...rows].map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(",")).join("\n");
+                          const blob = new Blob([csv], { type: "text/csv" });
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement("a");
+                          a.href = url;
+                          a.download = `${viewingRosterEvent.title.replace(/\s+/g, "_")}_roster.csv`;
+                          a.click();
+                          URL.revokeObjectURL(url);
+                        }}
+                        className="text-sm bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700"
+                      >
+                        Export CSV
+                      </button>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-gray-50">
+                            <th className="text-left py-2 px-3 font-medium text-gray-700">Name</th>
+                            <th className="text-left py-2 px-3 font-medium text-gray-700">Email</th>
+                            <th className="text-left py-2 px-3 font-medium text-gray-700">Phone</th>
+                            <th className="text-left py-2 px-3 font-medium text-gray-700">Status</th>
+                            <th className="text-left py-2 px-3 font-medium text-gray-700">Registered</th>
+                            <th className="text-left py-2 px-3 font-medium text-gray-700">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {eventRegistrations.map((registration) => {
+                            const data = registration.data as Record<string, string>;
+                            return (
+                              <tr key={registration.id} className="border-t border-gray-100">
+                                <td className="py-2 px-3">{data.name || "-"}</td>
+                                <td className="py-2 px-3">
+                                  <a href={`mailto:${data.email}`} className="text-blue-600 hover:underline">
+                                    {data.email || "-"}
+                                  </a>
+                                </td>
+                                <td className="py-2 px-3">{data.phone || "-"}</td>
+                                <td className="py-2 px-3">
+                                  <select
+                                    value={registration.status}
+                                    onChange={async (e) => {
+                                      try {
+                                        const res = await fetch(`/api/event-registrations/${registration.id}`, {
+                                          method: "PUT",
+                                          headers: { "Content-Type": "application/json" },
+                                          body: JSON.stringify({ status: e.target.value })
+                                        });
+                                        if (res.ok) {
+                                          setEventRegistrations(prev =>
+                                            prev.map(r => r.id === registration.id ? { ...r, status: e.target.value as EventRegistration["status"] } : r)
+                                          );
+                                        }
+                                      } catch (error) {
+                                        console.error("Error updating status:", error);
+                                      }
+                                    }}
+                                    className={`text-xs px-2 py-1 rounded border ${
+                                      registration.status === "confirmed" ? "bg-green-50 text-green-700 border-green-200" :
+                                      registration.status === "waitlisted" ? "bg-yellow-50 text-yellow-700 border-yellow-200" :
+                                      "bg-red-50 text-red-700 border-red-200"
+                                    }`}
+                                  >
+                                    <option value="confirmed">Confirmed</option>
+                                    <option value="waitlisted">Waitlisted</option>
+                                    <option value="cancelled">Cancelled</option>
+                                  </select>
+                                </td>
+                                <td className="py-2 px-3 text-gray-500 text-xs">
+                                  {new Date(registration.created_at).toLocaleDateString()}
+                                </td>
+                                <td className="py-2 px-3">
+                                  <button
+                                    onClick={async () => {
+                                      if (confirm("Are you sure you want to delete this registration?")) {
+                                        try {
+                                          const res = await fetch(`/api/event-registrations/${registration.id}`, { method: "DELETE" });
+                                          if (res.ok) {
+                                            setEventRegistrations(prev => prev.filter(r => r.id !== registration.id));
+                                          }
+                                        } catch (error) {
+                                          console.error("Error deleting registration:", error);
+                                        }
+                                      }
+                                    }}
+                                    className="text-red-600 hover:text-red-700 text-xs"
+                                  >
+                                    Delete
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Show additional custom fields if any */}
+                    {eventRegistrations.length > 0 && Object.keys(eventRegistrations[0].data as Record<string, unknown>).filter(k => !["name", "email", "phone"].includes(k)).length > 0 && (
+                      <div className="mt-6 pt-4 border-t">
+                        <h4 className="text-sm font-medium text-gray-700 mb-3">Additional Registration Data</h4>
+                        <div className="space-y-3">
+                          {eventRegistrations.map((registration) => {
+                            const data = registration.data as Record<string, unknown>;
+                            const customFields = Object.entries(data).filter(([k]) => !["name", "email", "phone"].includes(k));
+                            if (customFields.length === 0) return null;
+                            return (
+                              <div key={registration.id} className="bg-gray-50 p-3 rounded text-sm">
+                                <p className="font-medium text-gray-900 mb-1">{data.name as string}</p>
+                                <div className="grid grid-cols-2 gap-2">
+                                  {customFields.map(([key, value]) => (
+                                    <div key={key}>
+                                      <span className="text-gray-500">{key.replace(/_/g, " ")}: </span>
+                                      <span className="text-gray-900">
+                                        {Array.isArray(value) ? value.join(", ") : String(value)}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
         )}
       </main>
     </div>
@@ -1590,12 +1854,25 @@ function FormEditorModal({
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-gray-600 mb-1">Type</label>
-                      <select value={field.type} onChange={(e) => updateField(index, { type: e.target.value as FormField["type"] })} className="w-full px-2 py-1 text-sm border border-gray-300 rounded">
+                      <select
+                        value={field.type}
+                        onChange={(e) => {
+                          const newType = e.target.value as FormField["type"];
+                          updateField(index, {
+                            type: newType,
+                            options: ["select", "multiselect", "checkbox"].includes(newType) ? (field.options || []) : undefined
+                          });
+                        }}
+                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                      >
                         <option value="text">Text</option>
                         <option value="email">Email</option>
                         <option value="phone">Phone</option>
+                        <option value="number">Number</option>
+                        <option value="date">Date</option>
                         <option value="textarea">Text Area</option>
-                        <option value="select">Dropdown</option>
+                        <option value="select">Dropdown (Single)</option>
+                        <option value="multiselect">Dropdown (Multi-select)</option>
                         <option value="checkbox">Checkbox</option>
                       </select>
                     </div>
@@ -1608,17 +1885,41 @@ function FormEditorModal({
                   </div>
 
                   <div className="grid grid-cols-2 gap-3 mt-3">
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Placeholder</label>
-                      <input type="text" value={field.placeholder || ""} onChange={(e) => updateField(index, { placeholder: e.target.value })} className="w-full px-2 py-1 text-sm border border-gray-300 rounded" />
-                    </div>
-                    {field.type === "select" && (
+                    {["text", "email", "phone", "number", "textarea"].includes(field.type) && (
                       <div>
-                        <label className="block text-xs font-medium text-gray-600 mb-1">Options (comma-separated)</label>
-                        <input type="text" value={field.options?.join(", ") || ""} onChange={(e) => updateField(index, { options: e.target.value.split(",").map(s => s.trim()).filter(Boolean) })} className="w-full px-2 py-1 text-sm border border-gray-300 rounded" />
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Placeholder</label>
+                        <input type="text" value={field.placeholder || ""} onChange={(e) => updateField(index, { placeholder: e.target.value })} className="w-full px-2 py-1 text-sm border border-gray-300 rounded" />
                       </div>
                     )}
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Help Text</label>
+                      <input type="text" value={field.helpText || ""} onChange={(e) => updateField(index, { helpText: e.target.value })} className="w-full px-2 py-1 text-sm border border-gray-300 rounded" placeholder="Additional guidance for users" />
+                    </div>
                   </div>
+
+                  {/* Options editor for select/multiselect/checkbox */}
+                  {["select", "multiselect", "checkbox"].includes(field.type) && (
+                    <div className="mt-3 p-3 bg-gray-50 rounded-lg">
+                      <label className="block text-xs font-medium text-gray-600 mb-1">
+                        Options (one per line)
+                      </label>
+                      <textarea
+                        value={(field.options || []).join("\n")}
+                        onChange={(e) => {
+                          const options = e.target.value.split("\n").filter(opt => opt.trim() !== "" || e.target.value.endsWith("\n"));
+                          updateField(index, { options });
+                        }}
+                        placeholder="Option 1&#10;Option 2&#10;Option 3"
+                        rows={4}
+                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        {field.type === "checkbox" ? "Users can select multiple options as checkboxes" :
+                         field.type === "multiselect" ? "Users can select multiple options from a dropdown" :
+                         "Users select one option from a dropdown"}
+                      </p>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

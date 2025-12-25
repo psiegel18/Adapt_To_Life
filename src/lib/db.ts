@@ -450,11 +450,11 @@ export async function deleteReferral(id: number): Promise<boolean> {
 // Form field configuration
 export interface FormField {
   id: string;
-  type: "text" | "email" | "phone" | "textarea" | "select" | "checkbox";
+  type: "text" | "email" | "phone" | "textarea" | "select" | "multiselect" | "checkbox" | "number" | "date";
   label: string;
   placeholder?: string;
   required: boolean;
-  options?: string[]; // For select fields
+  options?: string[]; // For select/multiselect/checkbox fields
   helpText?: string;
 }
 

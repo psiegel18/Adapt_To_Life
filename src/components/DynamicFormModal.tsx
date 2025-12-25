@@ -200,7 +200,56 @@ export default function DynamicFormModal({
           </select>
         );
 
+      case "multiselect": {
+        const selectedValues = formData[field.id] ? formData[field.id].split(",").filter(Boolean) : [];
+        return (
+          <div className="space-y-2">
+            {field.options?.map((option) => (
+              <label key={option} className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={selectedValues.includes(option)}
+                  onChange={(e) => {
+                    const newValues = e.target.checked
+                      ? [...selectedValues, option]
+                      : selectedValues.filter((v) => v !== option);
+                    handleInputChange(field.id, newValues.join(","));
+                  }}
+                  className="w-5 h-5 text-[#FF6B35] border-gray-300 rounded focus:ring-[#FF6B35]"
+                />
+                <span className="text-gray-700">{option}</span>
+              </label>
+            ))}
+          </div>
+        );
+      }
+
       case "checkbox":
+        // If options are provided, render as multiple checkboxes
+        if (field.options && field.options.length > 0) {
+          const checkedOptions = formData[field.id] ? formData[field.id].split(",").filter(Boolean) : [];
+          return (
+            <div className="space-y-2">
+              {field.options.map((option) => (
+                <label key={option} className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={checkedOptions.includes(option)}
+                    onChange={(e) => {
+                      const newValues = e.target.checked
+                        ? [...checkedOptions, option]
+                        : checkedOptions.filter((v) => v !== option);
+                      handleInputChange(field.id, newValues.join(","));
+                    }}
+                    className="w-5 h-5 text-[#FF6B35] border-gray-300 rounded focus:ring-[#FF6B35]"
+                  />
+                  <span className="text-gray-700">{option}</span>
+                </label>
+              ))}
+            </div>
+          );
+        }
+        // Single checkbox (no options)
         return (
           <label className="flex items-center gap-2 cursor-pointer">
             <input
@@ -214,6 +263,29 @@ export default function DynamicFormModal({
             />
             <span className="text-gray-700">{field.label}</span>
           </label>
+        );
+
+      case "number":
+        return (
+          <input
+            type="number"
+            id={field.id}
+            value={formData[field.id] || ""}
+            onChange={(e) => handleInputChange(field.id, e.target.value)}
+            placeholder={field.placeholder}
+            className={baseInputClasses}
+          />
+        );
+
+      case "date":
+        return (
+          <input
+            type="date"
+            id={field.id}
+            value={formData[field.id] || ""}
+            onChange={(e) => handleInputChange(field.id, e.target.value)}
+            className={baseInputClasses}
+          />
         );
 
       default:
