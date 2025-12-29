@@ -1,11 +1,23 @@
 "use client";
 
 import * as Sentry from "@sentry/nextjs";
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 
 // This page is only for testing Sentry integration
-// It should be removed or protected in production
+// Protected by admin authentication
 
 export default function SentryTestPage() {
+  const { data: session, status } = useSession();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (status === "unauthenticated") {
+      router.push("/admin/login");
+    }
+  }, [status, router]);
+
   const triggerClientError = () => {
     throw new Error("Test client-side error from Sentry test page");
   };
@@ -15,12 +27,29 @@ export default function SentryTestPage() {
       throw new Error("Test captured error with custom tags");
     } catch (error) {
       Sentry.withScope((scope) => {
-        scope.setTag("test_type", "manual_capture");
+        // Set all custom tags to verify they appear in Sentry
+        scope.setTag("page_type", "admin");
         scope.setTag("feature_area", "testing");
+        scope.setTag("user_role", "admin");
+        scope.setTag("form_type", "test_form");
+        scope.setTag("event_id", "test_123");
+        scope.setTag("db_operation", "read");
+        scope.setTag("api_endpoint", "/api/sentry-test");
+        scope.setTag("request_method", "GET");
         scope.setLevel("warning");
         Sentry.captureException(error);
       });
-      alert("Error captured and sent to Sentry!");
+      alert(
+        "Error captured with tags! Check Sentry for:\n" +
+        "- page_type: admin\n" +
+        "- feature_area: testing\n" +
+        "- user_role: admin\n" +
+        "- form_type: test_form\n" +
+        "- event_id: test_123\n" +
+        "- db_operation: read\n" +
+        "- api_endpoint: /api/sentry-test\n" +
+        "- request_method: GET"
+      );
     }
   };
 
@@ -41,13 +70,36 @@ export default function SentryTestPage() {
     alert("Message sent to Sentry!");
   };
 
+  // Show loading while checking auth
+  if (status === "loading") {
+    return (
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+        <div className="text-gray-600">Loading...</div>
+      </div>
+    );
+  }
+
+  // Don't render if not authenticated
+  if (!session) {
+    return (
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+        <div className="text-gray-600">Redirecting to login...</div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-100 py-12 px-4">
       <div className="max-w-2xl mx-auto">
         <div className="bg-white rounded-lg shadow-lg p-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            Sentry Integration Test
-          </h1>
+          <div className="flex items-center justify-between mb-2">
+            <h1 className="text-3xl font-bold text-gray-900">
+              Sentry Integration Test
+            </h1>
+            <span className="text-sm bg-green-100 text-green-800 px-2 py-1 rounded">
+              Admin Only
+            </span>
+          </div>
           <p className="text-gray-600 mb-8">
             Use these buttons to test different Sentry features. Check your{" "}
             <a
@@ -82,12 +134,14 @@ export default function SentryTestPage() {
             {/* Captured Error Test */}
             <div className="border rounded-lg p-4">
               <h2 className="font-semibold text-lg mb-2">
-                2. Captured Error with Tags
+                2. Captured Error with All Custom Tags
               </h2>
               <p className="text-sm text-gray-600 mb-3">
-                Manually captures an error with custom tags - tests tag
-                filtering in Sentry.
+                Captures an error with all 8 custom tags to verify they appear in Sentry.
               </p>
+              <div className="text-xs text-gray-500 mb-3 font-mono bg-gray-50 p-2 rounded">
+                page_type, feature_area, user_role, form_type, event_id, db_operation, api_endpoint, request_method
+              </div>
               <button
                 onClick={triggerCapturedError}
                 className="bg-orange-600 text-white px-4 py-2 rounded hover:bg-orange-700 transition"
@@ -132,9 +186,8 @@ export default function SentryTestPage() {
 
           <div className="mt-8 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
             <p className="text-sm text-yellow-800">
-              <strong>Note:</strong> This page should be removed or protected
-              before deploying to production. Events may take a few seconds to
-              appear in Sentry.
+              <strong>Note:</strong> This page is admin-only. Events may take a
+              few seconds to appear in Sentry.
             </p>
           </div>
         </div>
