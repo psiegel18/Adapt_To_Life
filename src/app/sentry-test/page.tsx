@@ -1,11 +1,23 @@
 "use client";
 
 import * as Sentry from "@sentry/nextjs";
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 
 // This page is only for testing Sentry integration
-// It should be removed or protected in production
+// Protected by admin authentication
 
 export default function SentryTestPage() {
+  const { data: session, status } = useSession();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (status === "unauthenticated") {
+      router.push("/admin/login");
+    }
+  }, [status, router]);
+
   const triggerClientError = () => {
     throw new Error("Test client-side error from Sentry test page");
   };
@@ -41,13 +53,36 @@ export default function SentryTestPage() {
     alert("Message sent to Sentry!");
   };
 
+  // Show loading while checking auth
+  if (status === "loading") {
+    return (
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+        <div className="text-gray-600">Loading...</div>
+      </div>
+    );
+  }
+
+  // Don't render if not authenticated
+  if (!session) {
+    return (
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+        <div className="text-gray-600">Redirecting to login...</div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-100 py-12 px-4">
       <div className="max-w-2xl mx-auto">
         <div className="bg-white rounded-lg shadow-lg p-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            Sentry Integration Test
-          </h1>
+          <div className="flex items-center justify-between mb-2">
+            <h1 className="text-3xl font-bold text-gray-900">
+              Sentry Integration Test
+            </h1>
+            <span className="text-sm bg-green-100 text-green-800 px-2 py-1 rounded">
+              Admin Only
+            </span>
+          </div>
           <p className="text-gray-600 mb-8">
             Use these buttons to test different Sentry features. Check your{" "}
             <a
@@ -132,9 +167,8 @@ export default function SentryTestPage() {
 
           <div className="mt-8 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
             <p className="text-sm text-yellow-800">
-              <strong>Note:</strong> This page should be removed or protected
-              before deploying to production. Events may take a few seconds to
-              appear in Sentry.
+              <strong>Note:</strong> This page is admin-only. Events may take a
+              few seconds to appear in Sentry.
             </p>
           </div>
         </div>
