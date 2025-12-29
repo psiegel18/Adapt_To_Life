@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getFormSubmissions, createFormSubmission, getFormConfig } from "@/lib/db";
 import { sendAdminNotification, sendConfirmationEmail } from "@/lib/email";
+import { captureApiError } from "@/lib/sentry";
 
 // GET - Get all form submissions (admin only)
 export async function GET(request: NextRequest) {
@@ -11,10 +12,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  try {
-    const { searchParams } = new URL(request.url);
-    const formType = searchParams.get("form_type") || undefined;
+  const { searchParams } = new URL(request.url);
+  const formType = searchParams.get("form_type") || undefined;
 
+  try {
     const submissions = await getFormSubmissions(formType);
     return NextResponse.json(submissions);
   } catch (error) {
@@ -24,6 +25,14 @@ export async function GET(request: NextRequest) {
     if (errorMessage.includes("does not exist") || errorMessage.includes("relation")) {
       return NextResponse.json([]);
     }
+    captureApiError(error, {
+      endpoint: "/api/form-submissions",
+      method: "GET",
+      featureArea: "forms",
+      formType: formType,
+      isAdmin: true,
+      dbOperation: "read",
+    });
     return NextResponse.json(
       { error: "Failed to fetch form submissions" },
       { status: 500 }
@@ -33,9 +42,12 @@ export async function GET(request: NextRequest) {
 
 // POST - Create a new form submission (public)
 export async function POST(request: NextRequest) {
+  let formType: string | undefined;
+
   try {
     const body = await request.json();
     const { form_type, data, _honeypot } = body;
+    formType = form_type;
 
     // Spam protection: if honeypot field is filled, silently reject
     if (_honeypot) {
@@ -103,6 +115,14 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error("Error creating form submission:", error);
+    captureApiError(error, {
+      endpoint: "/api/form-submissions",
+      method: "POST",
+      featureArea: "forms",
+      formType: formType,
+      isAdmin: false,
+      dbOperation: "write",
+    });
     return NextResponse.json(
       { error: "Failed to submit form" },
       { status: 500 }

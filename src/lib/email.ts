@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import { captureEmailError } from "@/lib/sentry";
 
 // Initialize Resend - will be undefined if API key not set
 const resend = process.env.RESEND_API_KEY
@@ -77,6 +78,7 @@ export async function sendAdminNotification(
     return true;
   } catch (error) {
     console.error("Failed to send admin notification:", error);
+    captureEmailError(error, "admin_notification", formType);
     return false;
   }
 }
@@ -156,6 +158,7 @@ export async function sendConfirmationEmail(
     return true;
   } catch (error) {
     console.error("Failed to send confirmation email:", error);
+    captureEmailError(error, "confirmation", formType);
     return false;
   }
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getEvents, createEvent } from "@/lib/db";
+import { captureApiError } from "@/lib/sentry";
 
 // GET /api/events - Get all events (public)
 export async function GET() {
@@ -10,6 +11,12 @@ export async function GET() {
     return NextResponse.json(events);
   } catch (error) {
     console.error("Error fetching events:", error);
+    captureApiError(error, {
+      endpoint: "/api/events",
+      method: "GET",
+      featureArea: "events",
+      dbOperation: "read",
+    });
     return NextResponse.json(
       { error: "Failed to fetch events" },
       { status: 500 }
@@ -52,6 +59,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(event, { status: 201 });
   } catch (error) {
     console.error("Error creating event:", error);
+    captureApiError(error, {
+      endpoint: "/api/events",
+      method: "POST",
+      featureArea: "events",
+      dbOperation: "write",
+      isAdmin: true,
+    });
     return NextResponse.json(
       { error: "Failed to create event" },
       { status: 500 }
