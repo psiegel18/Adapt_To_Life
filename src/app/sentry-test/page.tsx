@@ -27,12 +27,29 @@ export default function SentryTestPage() {
       throw new Error("Test captured error with custom tags");
     } catch (error) {
       Sentry.withScope((scope) => {
-        scope.setTag("test_type", "manual_capture");
+        // Set all custom tags to verify they appear in Sentry
+        scope.setTag("page_type", "admin");
         scope.setTag("feature_area", "testing");
+        scope.setTag("user_role", "admin");
+        scope.setTag("form_type", "test_form");
+        scope.setTag("event_id", "test_123");
+        scope.setTag("db_operation", "read");
+        scope.setTag("api_endpoint", "/api/sentry-test");
+        scope.setTag("request_method", "GET");
         scope.setLevel("warning");
         Sentry.captureException(error);
       });
-      alert("Error captured and sent to Sentry!");
+      alert(
+        "Error captured with tags! Check Sentry for:\n" +
+        "- page_type: admin\n" +
+        "- feature_area: testing\n" +
+        "- user_role: admin\n" +
+        "- form_type: test_form\n" +
+        "- event_id: test_123\n" +
+        "- db_operation: read\n" +
+        "- api_endpoint: /api/sentry-test\n" +
+        "- request_method: GET"
+      );
     }
   };
 
@@ -117,12 +134,14 @@ export default function SentryTestPage() {
             {/* Captured Error Test */}
             <div className="border rounded-lg p-4">
               <h2 className="font-semibold text-lg mb-2">
-                2. Captured Error with Tags
+                2. Captured Error with All Custom Tags
               </h2>
               <p className="text-sm text-gray-600 mb-3">
-                Manually captures an error with custom tags - tests tag
-                filtering in Sentry.
+                Captures an error with all 8 custom tags to verify they appear in Sentry.
               </p>
+              <div className="text-xs text-gray-500 mb-3 font-mono bg-gray-50 p-2 rounded">
+                page_type, feature_area, user_role, form_type, event_id, db_operation, api_endpoint, request_method
+              </div>
               <button
                 onClick={triggerCapturedError}
                 className="bg-orange-600 text-white px-4 py-2 rounded hover:bg-orange-700 transition"
